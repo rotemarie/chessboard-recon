@@ -1,0 +1,185 @@
+CHESSBOARD PREPROCESSING PIPELINE
+==================================
+
+INPUT: Raw chessboard image from video frame
+         ┃
+         ┃  CSV: frame_000200, fen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+         ┃
+         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                                                               │
+│  STEP 1: BOARD DETECTION (board_detector.py)                │
+│                                                               │
+│  1. Convert to grayscale                                     │
+│  2. Apply Gaussian blur                                      │
+│  3. Canny edge detection                                     │
+│  4. Find contours                                            │
+│  5. Filter for quadrilaterals (4 corners)                    │
+│  6. Select largest quadrilateral                             │
+│  7. Order corners: [TL, TR, BR, BL]                          │
+│                                                               │
+│  Fallback: Adaptive thresholding + morphology                │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+         ┃
+         ┃  Corners: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+         ┃
+         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                                                               │
+│  PERSPECTIVE TRANSFORM                                       │
+│                                                               │
+│  Source:      Detected corners (quadrilateral)               │
+│  Destination: Perfect square (512x512)                       │
+│                                                               │
+│  cv2.getPerspectiveTransform() + cv2.warpPerspective()      │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+         ┃
+         ┃  Warped board: 512x512 pixels, top-down view
+         ┃
+         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                                                               │
+│  STEP 2: SQUARE EXTRACTION (square_extractor.py)            │
+│                                                               │
+│  Split 512x512 board into 8x8 grid                          │
+│  Each square: 64x64 pixels                                   │
+│                                                               │
+│  Order: Row by row, left to right                            │
+│  a8, b8, c8, d8, e8, f8, g8, h8,                            │
+│  a7, b7, c7, ..., h7,                                        │
+│  ...,                                                         │
+│  a1, b1, c1, d1, e1, f1, g1, h1                             │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+         ┃
+         ┃  64 square images
+         ┃
+         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                                                               │
+│  STEP 3: FEN PARSING (square_extractor.py)                  │
+│                                                               │
+│  FEN: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"         │
+│                                                               │
+│  Parse each rank (separated by /):                           │
+│    r → black_rook                                            │
+│    n → black_knight                                          │
+│    b → black_bishop                                          │
+│    q → black_queen                                           │
+│    k → black_king                                            │
+│    p → black_pawn                                            │
+│    R → white_rook                                            │
+│    N → white_knight                                          │
+│    B → white_bishop                                          │
+│    Q → white_queen                                           │
+│    K → white_king                                            │
+│    P → white_pawn                                            │
+│    8 → 8 empty squares                                       │
+│                                                               │
+│  Output: 64 labels matching 64 squares                       │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+         ┃
+         ┃  Labels: ['black_rook', 'black_knight', ..., 'empty', ...]
+         ┃
+         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                                                               │
+│  STEP 4: SAVE LABELED SQUARES (preprocess_data.py)          │
+│                                                               │
+│  For each square and its label:                              │
+│                                                               │
+│    filename: game2_frame_000200_a8.jpg                       │
+│    path: preprocessed_data/train/black_rook/                │
+│                                                               │
+│  Also save:                                                  │
+│    - Warped board (for inspection)                           │
+│    - Metadata (processing status)                            │
+│    - Failed detections (for debugging)                       │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+         ┃
+         ┃
+         ▼
+OUTPUT: Organized dataset ready for training
+        preprocessed_data/train/
+          ├── white_pawn/     (many images)
+          ├── white_knight/   (fewer images)
+          ├── white_bishop/
+          ├── white_rook/
+          ├── white_queen/
+          ├── white_king/
+          ├── black_pawn/
+          ├── black_knight/
+          ├── black_bishop/
+          ├── black_rook/
+          ├── black_queen/
+          ├── black_king/
+          └── empty/          (most images)
+
+
+KEY DESIGN DECISIONS
+====================
+
+1. Board Size: 512x512 pixels
+   - Large enough to preserve detail
+   - Power of 2 (efficient for neural networks)
+   - Square size: 64x64 pixels
+
+2. Corner Ordering: [Top-Left, Top-Right, Bottom-Right, Bottom-Left]
+   - Consistent orientation
+   - Matches chessboard convention
+
+3. Square Indexing: Rank 8 to Rank 1, File a to File h
+   - Matches FEN notation order
+   - Index 0 = a8, Index 63 = h1
+
+4. Class Names: "color_piece" format
+   - Clear and unambiguous
+   - Easy to parse and visualize
+
+5. Filename Format: "game_frame_position.jpg"
+   - Traceable back to source
+   - Unique identifier
+   - Contains position information
+
+
+TRICKY PARTS & SOLUTIONS
+=========================
+
+1. CORNER DETECTION
+   Problem: Board might be at any angle, lighting varies
+   Solution: 
+   - Primary: Edge detection + contour finding
+   - Fallback: Adaptive thresholding + bounding box
+   - Order corners using coordinate sums/differences
+
+2. PERSPECTIVE DISTORTION
+   Problem: Angled photos make squares non-uniform
+   Solution: 
+   - cv2.getPerspectiveTransform() from 4 corners
+   - Warp to perfect square grid
+
+3. FEN PARSING
+   Problem: Numbers represent multiple empty squares
+   Solution: 
+   - Expand numbers: '8' → ['empty'] * 8
+   - Handle each rank separately
+   - Validate total = 64 squares
+
+4. DATA ORGANIZATION
+   Problem: Need to track source of each square
+   Solution: 
+   - Filename includes game, frame, position
+   - Save metadata CSV with processing status
+   - Keep warped boards for visual verification
+
+5. ERROR HANDLING
+   Problem: Some boards might fail detection
+   Solution: 
+   - Save failed images separately
+   - Log all processing status
+   - Continue processing other images
+
