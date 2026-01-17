@@ -74,6 +74,10 @@ checkpoints/
 models/
 saved_models/
 
+# Exception: allow the trained model for deployment
+!model/resnet18_ft.pth
+!model/classes.txt
+
 # Training outputs
 runs/
 logs/
