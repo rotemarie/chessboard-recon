@@ -26,3 +26,6 @@ seaborn>=0.12.0
 # Model utilities
 scikit-learn>=1.3.0
 
+# Web UI
+streamlit>=1.29.0
+

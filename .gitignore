@@ -56,11 +56,13 @@ data/*.rar
 
 # Preprocessed outputs (can be regenerated)
 preprocessed_data/
+preprocessed_data_padded/
 warped_boards/
 failed_detections/
 
 # Dataset splits (can be regenerated with split_dataset.py)
 dataset/
+dataset_padded/
 
 # Model files (large)
 *.pth
