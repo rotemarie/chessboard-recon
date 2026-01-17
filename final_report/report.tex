@@ -125,9 +125,30 @@ We apply homography transformation to map detected corners to a perfect $512 \ti
 \end{equation}
 where $P_{src}$ are detected corners and $P_{dst} = \{(0,0), (512,0), (512,512), (0,512)\}$.
 
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.48\textwidth]{demo_input.jpg}
+\caption{Example input: Real chessboard image captured at an angle with varying lighting conditions.}
+\label{fig:demo_input}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.48\textwidth]{demo_warped.jpg}
+\caption{Warped board after perspective transformation: Top-down view normalized to 512×512 pixels.}
+\label{fig:demo_warped}
+\end{figure}
+
 \subsubsection{Square Extraction}
 
 The warped board is divided into an $8 \times 8$ grid, yielding 64 squares of $64 \times 64$ pixels each. Extraction follows FEN ordering: rank 8 to rank 1, files a through h (a8, b8, ..., h8, a7, ..., h1).
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.48\textwidth]{demo_squares.jpg}
+\caption{Grid of 64 extracted squares (8×8) ready for classification. Each square is 64×64 pixels.}
+\label{fig:demo_squares}
+\end{figure}
 
 \subsubsection{FEN Parsing}
 
@@ -164,6 +185,13 @@ Our dataset consists of 5 labeled chess games with varying positions:
 
 After preprocessing with 92\% success rate, we obtained 30,401 high-quality square images.
 
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.48\textwidth]{random_samples_from_each_class.png}
+\caption{Random samples from each of the 13 classes showing the diversity and challenges in the dataset.}
+\label{fig:dataset_samples}
+\end{figure}
+
 \subsubsection{Class Distribution}
 
 The dataset exhibits natural class imbalance typical of chess games:
@@ -190,6 +218,13 @@ Black King & 463 & 1.5\% \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.48\textwidth]{01_train_val_distribution.png}
+\caption{Class distribution across training and validation sets showing natural chess game imbalance.}
+\label{fig:class_distribution}
+\end{figure}
 
 \subsubsection{Data Splitting}
 
@@ -404,17 +439,23 @@ The ResNet18 fine-tuned model showed stable convergence:
 
 The gap between training and validation accuracy (10\%) suggests slight overfitting, but early stopping effectively prevented severe degradation.
 
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.48\textwidth]{model_confidence.png}
+\caption{Model confidence distribution and prediction accuracy across validation set. High confidence predictions strongly correlate with correct classifications.}
+\label{fig:model_confidence}
+\end{figure}
+
 \subsection{OOD Detection Results}
 
 \subsubsection{Confidence Distribution Analysis}
 
-% \begin{figure}[h]
-% \centering
-% \includegraphics[width=0.45\textwidth]{ood_confidence_distribution.png}
-% \caption{Cumulative distribution of confidence scores for clean vs. occluded images. Clear separation validates MSP-based OOD detection.}
-% \end{figure}
-
-% Note: Figure commented out - create ood_confidence_distribution.png to include it
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.48\textwidth]{clean_vs_occluded.png}
+\caption{Confidence score distributions for clean vs. occluded images. Clear separation validates MSP-based OOD detection approach.}
+\label{fig:ood_confidence}
+\end{figure}
 
 \begin{table}[h]
 \centering
@@ -502,6 +543,13 @@ Extreme shadows or highlights alter piece appearance.
 
 \textbf{5. Empty Square Misclassification (10\% of errors):}
 Board patterns or shadows misclassified as pieces.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{error_visualization.png}
+\caption{Comprehensive error analysis showing misclassified samples with their predicted labels, true labels, and confidence scores. Highlights common failure modes including piece cropping, similar piece confusion, and occlusions.}
+\label{fig:error_viz}
+\end{figure*}
 
 \subsection{Suggested Improvements}
 
