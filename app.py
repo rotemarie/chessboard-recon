@@ -309,8 +309,11 @@ def main():
     # Header
     st.markdown('<div class="main-header">Chessboard Recognition System</div>', 
                 unsafe_allow_html=True)
-    st.markdown('<div style="text-align: center; color: #666; margin-bottom: 2rem;">'
+    st.markdown('<div style="text-align: center; color: #666; margin-bottom: 0.5rem;">'
                 'Deep Learning Project - Ben-Gurion University 2026</div>', 
+                unsafe_allow_html=True)
+    st.markdown('<div style="text-align: center; color: #888; margin-bottom: 2rem; font-size: 0.9rem;">'
+                'Sean Grinberg • David Paster • Rotem Arie</div>', 
                 unsafe_allow_html=True)
     
     # Sidebar
@@ -1224,6 +1227,7 @@ Training time: ~2-3 hours (GPU)
     <div style="text-align: center; color: #666; padding: 2rem;">
         <p><strong>Chessboard Recognition System</strong></p>
         <p>Introduction to Deep Learning Course • Ben-Gurion University of the Negev • 2026</p>
+        <p style="color: #888; font-size: 0.9rem;">Sean Grinberg • David Paster • Rotem Arie</p>
         <p>Technologies: PyTorch • OpenCV • Streamlit</p>
         <p style="margin-top: 1rem;">
             <a href="https://github.com/rotemarie/chessboard-recon" target="_blank" style="color: #2E86AB; text-decoration: none;">
