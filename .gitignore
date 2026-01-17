@@ -96,11 +96,14 @@ test_visualization.png
 *.png
 *.jpg
 *.jpeg
-# But keep any images in docs or examples
+# But keep any images in docs, examples, and output (for demo)
 !docs/**/*.png
 !docs/**/*.jpg
 !examples/**/*.png
 !examples/**/*.jpg
+!output/*.jpg
+!output/*.jpeg
+!output/*.png
 
 # Large archives
 *.zip
