@@ -9,7 +9,6 @@ import numpy as np
 from pathlib import Path
 import sys
 from PIL import Image
-import torch
 import json
 
 # Add preprocessing to path
@@ -19,20 +18,39 @@ sys.path.append(str(Path(__file__).parent / 'inference'))
 from preprocessing.board_detector import BoardDetector
 from preprocessing.square_extractor import SquareExtractor, FENParser
 
-# Try to import inference pipeline
-try:
-    from inference.pipeline import (
-        load_model, 
-        make_transform, 
-        classify_squares,
-        labels_to_fen_with_unknown,
-        render_board_svg,
-        load_class_names
-    )
-    INFERENCE_AVAILABLE = True
-except ImportError as e:
-    INFERENCE_AVAILABLE = False
-    print(f"Inference module not available: {e}")
+# Try to import inference pipeline (lazy import to avoid permission errors)
+INFERENCE_AVAILABLE = False
+inference_modules = {}
+
+def load_inference_modules():
+    """Lazy load inference modules to avoid permission errors on startup."""
+    global INFERENCE_AVAILABLE, inference_modules
+    if not INFERENCE_AVAILABLE and not inference_modules:
+        try:
+            import torch
+            from inference.pipeline import (
+                load_model, 
+                make_transform, 
+                classify_squares,
+                labels_to_fen_with_unknown,
+                render_board_svg,
+                load_class_names
+            )
+            inference_modules = {
+                'torch': torch,
+                'load_model': load_model,
+                'make_transform': make_transform,
+                'classify_squares': classify_squares,
+                'labels_to_fen_with_unknown': labels_to_fen_with_unknown,
+                'render_board_svg': render_board_svg,
+                'load_class_names': load_class_names
+            }
+            INFERENCE_AVAILABLE = True
+            return True
+        except Exception as e:
+            st.error(f"Failed to load inference modules: {e}")
+            return False
+    return INFERENCE_AVAILABLE
 
 
 # Page configuration
@@ -138,7 +156,8 @@ def run_inference_pipeline(image_path, model_path=None, threshold=0.80):
     Returns:
         dict with results or None if failed
     """
-    if not INFERENCE_AVAILABLE:
+    # Load inference modules if needed
+    if not load_inference_modules():
         return None
     
     try:
@@ -159,6 +178,15 @@ def run_inference_pipeline(image_path, model_path=None, threshold=0.80):
         
         # Step 3: Load model and classify (if model available)
         if model_path and Path(model_path).exists():
+            # Get inference functions
+            torch = inference_modules['torch']
+            load_model = inference_modules['load_model']
+            make_transform = inference_modules['make_transform']
+            classify_squares = inference_modules['classify_squares']
+            labels_to_fen_with_unknown = inference_modules['labels_to_fen_with_unknown']
+            render_board_svg = inference_modules['render_board_svg']
+            load_class_names = inference_modules['load_class_names']
+            
             # Load class names
             project_root = Path(__file__).parent
             class_dir = project_root / "dataset" / "train"
@@ -888,10 +916,9 @@ Training time: ~2-3 hours (GPU)
         st.markdown("---")
         st.markdown("### 🚀 Try Live Inference")
         
-        if INFERENCE_AVAILABLE:
-            st.markdown("""
-            Upload your own chessboard image and run the complete pipeline with a trained model!
-            """)
+        st.markdown("""
+        Upload your own chessboard image and run the complete pipeline with a trained model!
+        """)
             
             col1, col2 = st.columns([2, 1])
             
@@ -1013,16 +1040,6 @@ Training time: ~2-3 hours (GPU)
                             st.error(f"Error: {results['error']}")
                         else:
                             st.error("Inference failed. Please check your model and image.")
-        else:
-            st.warning("""
-            **Inference module not available.**
-            
-            To enable live inference:
-            1. Install required dependencies: `pip install torch torchvision python-chess`
-            2. Ensure the `inference/` module is present
-            3. Place your trained model at `model/resnet18_ft.pth`
-            4. Restart the application
-            """)
     
     with tab4:
         st.markdown('<div class="sub-header">Step 1: Load Chessboard Image</div>', 
