@@ -9,12 +9,30 @@ import numpy as np
 from pathlib import Path
 import sys
 from PIL import Image
+import torch
+import json
 
 # Add preprocessing to path
 sys.path.append(str(Path(__file__).parent / 'preprocessing'))
+sys.path.append(str(Path(__file__).parent / 'inference'))
 
 from preprocessing.board_detector import BoardDetector
 from preprocessing.square_extractor import SquareExtractor, FENParser
+
+# Try to import inference pipeline
+try:
+    from inference.pipeline import (
+        load_model, 
+        make_transform, 
+        classify_squares,
+        labels_to_fen_with_unknown,
+        render_board_svg,
+        load_class_names
+    )
+    INFERENCE_AVAILABLE = True
+except ImportError as e:
+    INFERENCE_AVAILABLE = False
+    print(f"Inference module not available: {e}")
 
 
 # Page configuration
@@ -88,6 +106,16 @@ def init_session_state():
         st.session_state.predictions = None
     if 'fen' not in st.session_state:
         st.session_state.fen = None
+    if 'model' not in st.session_state:
+        st.session_state.model = None
+    if 'class_names' not in st.session_state:
+        st.session_state.class_names = None
+    if 'board_svg' not in st.session_state:
+        st.session_state.board_svg = None
+    if 'confidences' not in st.session_state:
+        st.session_state.confidences = None
+    if 'unknown_indices' not in st.session_state:
+        st.session_state.unknown_indices = None
 
 
 def load_sample_images():
@@ -96,6 +124,103 @@ def load_sample_images():
     if samples_dir.exists():
         return sorted(list(samples_dir.glob("frame_*.jpg")))[:10]  # First 10 frames
     return []
+
+
+def run_inference_pipeline(image_path, model_path=None, threshold=0.80):
+    """
+    Run the complete inference pipeline on an image.
+    
+    Args:
+        image_path: Path to input image
+        model_path: Path to model checkpoint (optional)
+        threshold: Confidence threshold for OOD detection
+    
+    Returns:
+        dict with results or None if failed
+    """
+    if not INFERENCE_AVAILABLE:
+        return None
+    
+    try:
+        # Load image
+        image = cv2.imread(str(image_path))
+        if image is None:
+            return None
+        
+        # Step 1: Detect and warp board
+        detector = BoardDetector(board_size=512)
+        warped = detector.detect_board(image, debug=False)
+        if warped is None:
+            return {"error": "Board detection failed"}
+        
+        # Step 2: Extract squares
+        extractor = SquareExtractor(board_size=512)
+        squares = extractor.extract_squares(warped)
+        
+        # Step 3: Load model and classify (if model available)
+        if model_path and Path(model_path).exists():
+            # Load class names
+            project_root = Path(__file__).parent
+            class_dir = project_root / "dataset" / "train"
+            classes_file = project_root / "model" / "classes.txt"
+            
+            try:
+                class_names = load_class_names(
+                    str(class_dir) if class_dir.exists() else None,
+                    str(classes_file) if classes_file.exists() else None
+                )
+            except:
+                class_names = FENParser.get_piece_classes()
+            
+            # Load model
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            model = load_model(model_path, len(class_names), device)
+            transform = make_transform()
+            
+            # Classify
+            labels, confs, unknown_indices = classify_squares(
+                model=model,
+                squares=squares,
+                transform=transform,
+                class_names=class_names,
+                device=device,
+                threshold=threshold
+            )
+            
+            # Generate FEN
+            fen = labels_to_fen_with_unknown(labels)
+            
+            # Render board SVG
+            board_svg = render_board_svg(labels, unknown_indices, size=512)
+            
+            return {
+                "success": True,
+                "original": image,
+                "warped": warped,
+                "squares": squares,
+                "labels": labels,
+                "confidences": confs,
+                "unknown_indices": unknown_indices,
+                "fen": fen,
+                "board_svg": board_svg,
+                "class_names": class_names
+            }
+        else:
+            # No model, just return preprocessing results
+            return {
+                "success": True,
+                "original": image,
+                "warped": warped,
+                "squares": squares,
+                "labels": None,
+                "confidences": None,
+                "unknown_indices": [],
+                "fen": None,
+                "board_svg": None
+            }
+    
+    except Exception as e:
+        return {"error": str(e)}
 
 
 def preprocess_image(image_array, show_debug=False):
@@ -755,6 +880,146 @@ Training time: ~2-3 hours (GPU)
                 if st.button(f"{i+1}. {step['name']}", key=f"jump_{i}", use_container_width=True):
                     st.session_state.demo_step = i
                     st.rerun()
+        
+        # Live Inference Section
+        st.markdown("---")
+        st.markdown("### 🚀 Try Live Inference")
+        
+        if INFERENCE_AVAILABLE:
+            st.markdown("""
+            Upload your own chessboard image and run the complete pipeline with a trained model!
+            """)
+            
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                uploaded_file = st.file_uploader(
+                    "Upload Chessboard Image", 
+                    type=['jpg', 'jpeg', 'png'],
+                    key="live_inference_upload"
+                )
+            
+            with col2:
+                model_path = st.text_input(
+                    "Model Path (optional)",
+                    value="model/resnet18_ft.pth",
+                    help="Path to trained model checkpoint"
+                )
+                threshold = st.slider(
+                    "Confidence Threshold",
+                    min_value=0.5,
+                    max_value=1.0,
+                    value=0.80,
+                    step=0.05
+                )
+            
+            if uploaded_file is not None:
+                # Save uploaded file temporarily
+                temp_dir = Path(__file__).parent / "temp"
+                temp_dir.mkdir(exist_ok=True)
+                temp_image_path = temp_dir / uploaded_file.name
+                
+                with open(temp_image_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+                
+                if st.button("▶️ Run Complete Pipeline", type="primary", use_container_width=True):
+                    with st.spinner("Processing..."):
+                        # Check if model exists
+                        model_path_obj = Path(model_path)
+                        if not model_path_obj.exists():
+                            st.warning(f"Model not found at {model_path}. Running preprocessing only.")
+                            model_path = None
+                        
+                        results = run_inference_pipeline(
+                            str(temp_image_path),
+                            model_path=model_path,
+                            threshold=threshold
+                        )
+                        
+                        if results and "error" not in results:
+                            st.success("✓ Pipeline completed successfully!")
+                            
+                            # Display results
+                            st.markdown("#### Results")
+                            
+                            result_cols = st.columns(3)
+                            
+                            with result_cols[0]:
+                                st.markdown("**Original Image**")
+                                st.image(cv2.cvtColor(results["original"], cv2.COLOR_BGR2RGB))
+                            
+                            with result_cols[1]:
+                                st.markdown("**Warped Board**")
+                                st.image(cv2.cvtColor(results["warped"], cv2.COLOR_BGR2RGB))
+                            
+                            with result_cols[2]:
+                                if results["board_svg"]:
+                                    st.markdown("**Classified Board**")
+                                    st.components.v1.html(results["board_svg"], height=550)
+                                else:
+                                    st.markdown("**Square Extraction**")
+                                    st.info("Model not loaded - only preprocessing performed")
+                            
+                            # FEN output
+                            if results["fen"]:
+                                st.markdown("#### FEN Notation")
+                                st.code(results["fen"], language="text")
+                                
+                                # Statistics
+                                st.markdown("#### Classification Statistics")
+                                stats_cols = st.columns(4)
+                                
+                                with stats_cols[0]:
+                                    st.metric("Total Squares", "64")
+                                
+                                with stats_cols[1]:
+                                    if results["labels"]:
+                                        empty_count = results["labels"].count("empty")
+                                        st.metric("Empty Squares", empty_count)
+                                
+                                with stats_cols[2]:
+                                    if results["labels"]:
+                                        piece_count = sum(1 for l in results["labels"] if l not in ["empty", "unknown"])
+                                        st.metric("Pieces Detected", piece_count)
+                                
+                                with stats_cols[3]:
+                                    if results["unknown_indices"]:
+                                        st.metric("Unknown/Occluded", len(results["unknown_indices"]), delta_color="inverse")
+                                    else:
+                                        st.metric("Unknown/Occluded", 0)
+                                
+                                # Confidence distribution
+                                if results["confidences"]:
+                                    st.markdown("#### Confidence Distribution")
+                                    import pandas as pd
+                                    conf_data = pd.DataFrame({
+                                        "Square": [f"{i:02d}" for i in range(64)],
+                                        "Label": results["labels"],
+                                        "Confidence": results["confidences"]
+                                    })
+                                    
+                                    # Show low confidence squares
+                                    low_conf = conf_data[conf_data["Confidence"] < threshold].sort_values("Confidence")
+                                    if not low_conf.empty:
+                                        st.markdown("**Low Confidence Predictions (marked as unknown):**")
+                                        st.dataframe(low_conf, use_container_width=True)
+                                    else:
+                                        st.success("All predictions above threshold!")
+                        
+                        elif results and "error" in results:
+                            st.error(f"Error: {results['error']}")
+                        else:
+                            st.error("Inference failed. Please check your model and image.")
+        else:
+            st.warning("""
+            **Inference module not available.**
+            
+            To enable live inference:
+            1. Install required dependencies: `pip install torch torchvision python-chess`
+            2. Ensure the `inference/` module is present
+            3. Place your trained model at `model/resnet18_ft.pth`
+            4. Restart the application
+            """)
     
     with tab4:
         st.markdown('<div class="sub-header">Step 1: Load Chessboard Image</div>', 
