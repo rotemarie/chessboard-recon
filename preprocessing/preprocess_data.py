@@ -34,8 +34,12 @@ from tqdm import tqdm
 from typing import Dict, List, Tuple
 import shutil
 
-from board_detector import BoardDetector
-from square_extractor import SquareExtractor, FENParser
+try:
+    from .board_detector import BoardDetector
+    from .square_extractor import SquareExtractor, FENParser
+except ImportError:
+    from board_detector import BoardDetector
+    from square_extractor import SquareExtractor, FENParser
 
 
 class ChessDataPreprocessor:

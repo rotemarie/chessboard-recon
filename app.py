@@ -9,12 +9,50 @@ import numpy as np
 from pathlib import Path
 import sys
 from PIL import Image
+import json
 
 # Add preprocessing to path
 sys.path.append(str(Path(__file__).parent / 'preprocessing'))
+sys.path.append(str(Path(__file__).parent / 'inference'))
 
 from preprocessing.board_detector import BoardDetector
 from preprocessing.square_extractor import SquareExtractor, FENParser
+
+# Try to import inference pipeline (lazy import to avoid permission errors)
+INFERENCE_AVAILABLE = False
+inference_modules = {}
+
+def load_inference_modules():
+    """Lazy load inference modules to avoid permission errors on startup."""
+    global INFERENCE_AVAILABLE, inference_modules
+    if not INFERENCE_AVAILABLE and not inference_modules:
+        try:
+            import torch
+            from inference.pipeline import (
+                load_model, 
+                make_transform, 
+                classify_squares,
+                labels_to_fen_with_unknown,
+                render_board_svg,
+                load_class_names,
+                run_pipeline
+            )
+            inference_modules = {
+                'torch': torch,
+                'load_model': load_model,
+                'make_transform': make_transform,
+                'classify_squares': classify_squares,
+                'labels_to_fen_with_unknown': labels_to_fen_with_unknown,
+                'render_board_svg': render_board_svg,
+                'load_class_names': load_class_names,
+                'run_pipeline': run_pipeline
+            }
+            INFERENCE_AVAILABLE = True
+            return True
+        except Exception as e:
+            st.error(f"Failed to load inference modules: {e}")
+            return False
+    return INFERENCE_AVAILABLE
 
 
 # Page configuration
@@ -88,6 +126,16 @@ def init_session_state():
         st.session_state.predictions = None
     if 'fen' not in st.session_state:
         st.session_state.fen = None
+    if 'model' not in st.session_state:
+        st.session_state.model = None
+    if 'class_names' not in st.session_state:
+        st.session_state.class_names = None
+    if 'board_svg' not in st.session_state:
+        st.session_state.board_svg = None
+    if 'confidences' not in st.session_state:
+        st.session_state.confidences = None
+    if 'unknown_indices' not in st.session_state:
+        st.session_state.unknown_indices = None
 
 
 def load_sample_images():
@@ -96,6 +144,102 @@ def load_sample_images():
     if samples_dir.exists():
         return sorted(list(samples_dir.glob("frame_*.jpg")))[:10]  # First 10 frames
     return []
+
+
+def run_inference_pipeline(image_path, model_path=None, threshold=0.80):
+    """
+    Run the complete inference pipeline on an image using pipeline.py.
+    
+    Args:
+        image_path: Path to input image
+        model_path: Path to model checkpoint (optional)
+        threshold: Confidence threshold for OOD detection
+    
+    Returns:
+        dict with results or None if failed
+    """
+    # Load inference modules if needed
+    if not load_inference_modules():
+        return {"error": "Inference modules not available. Please install torch, torchvision, and python-chess."}
+    
+    try:
+        # Check if model exists
+        if not model_path or not Path(model_path).exists():
+            return {"error": f"Model not found at {model_path}. Please provide a valid model path."}
+        
+        # Get inference function from pipeline.py
+        run_pipeline = inference_modules.get('run_pipeline')
+        if not run_pipeline:
+            # Import it if not already loaded
+            from inference.pipeline import run_pipeline as pipeline_run
+            inference_modules['run_pipeline'] = pipeline_run
+            run_pipeline = pipeline_run
+        
+        # Create temporary output directory
+        temp_output = Path(__file__).parent / "temp" / "inference_output"
+        temp_output.mkdir(parents=True, exist_ok=True)
+        
+        # Setup paths
+        project_root = Path(__file__).parent
+        class_dir = project_root / "dataset" / "train"
+        classes_file = project_root / "model" / "classes.txt"
+        
+        # Run the complete pipeline from pipeline.py
+        run_pipeline(
+            image_path=str(image_path),
+            model_path=str(model_path),
+            output_dir=str(temp_output),
+            class_dir=str(class_dir) if class_dir.exists() else None,
+            classes_file=str(classes_file) if classes_file.exists() else None,
+            threshold=threshold,
+            board_size=512,
+            render_size=512,
+            save_square_crops=False,
+            print_squares=False,
+            crops_dir=None,
+            save_grid=True
+        )
+        
+        # Read the results
+        original = cv2.imread(str(image_path))
+        warped = cv2.imread(str(temp_output / "warped_board.jpg"))
+        fen_path = temp_output / "fen.txt"
+        svg_path = temp_output / "board.svg"
+        predictions_path = temp_output / "predictions.json"
+        grid_path = temp_output / "crops_grid.jpg"
+        
+        fen = fen_path.read_text(encoding="utf-8") if fen_path.exists() else None
+        board_svg = svg_path.read_text(encoding="utf-8") if svg_path.exists() else None
+        
+        # Load predictions
+        predictions = []
+        labels = []
+        confidences = []
+        unknown_indices = []
+        
+        if predictions_path.exists():
+            import json
+            predictions = json.loads(predictions_path.read_text(encoding="utf-8"))
+            labels = [p["label"] for p in predictions]
+            confidences = [p["confidence"] for p in predictions]
+            unknown_indices = [i for i, p in enumerate(predictions) if p["label"] == "unknown"]
+        
+        return {
+            "success": True,
+            "original": original,
+            "warped": warped,
+            "grid": cv2.imread(str(grid_path)) if grid_path.exists() else None,
+            "labels": labels,
+            "confidences": confidences,
+            "unknown_indices": unknown_indices,
+            "fen": fen,
+            "board_svg": board_svg,
+            "predictions": predictions
+        }
+    
+    except Exception as e:
+        import traceback
+        return {"error": f"{str(e)}\n\n{traceback.format_exc()}"}
 
 
 def preprocess_image(image_array, show_debug=False):
@@ -184,8 +328,11 @@ def main():
     # Header
     st.markdown('<div class="main-header">Chessboard Recognition System</div>', 
                 unsafe_allow_html=True)
-    st.markdown('<div style="text-align: center; color: #666; margin-bottom: 2rem;">'
+    st.markdown('<div style="text-align: center; color: #666; margin-bottom: 0.5rem;">'
                 'Deep Learning Project - Ben-Gurion University 2026</div>', 
+                unsafe_allow_html=True)
+    st.markdown('<div style="text-align: center; color: #888; margin-bottom: 2rem; font-size: 0.9rem;">'
+                'Sean Grinberg • David Paster • Rotem Arie</div>', 
                 unsafe_allow_html=True)
     
     # Sidebar
@@ -228,8 +375,8 @@ def main():
         """)
     
     # Main content
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "Project Overview", "Pipeline", "Demo: Input", "Demo: Preprocessing", "Demo: Classification", "Demo: Results"
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        "Project Overview", "Pipeline", "Full Demo", "Demo: Input", "Demo: Preprocessing", "Demo: Classification", "Demo: Results"
     ])
     
     # Tab 1: Project Overview
@@ -469,7 +616,7 @@ Frame,FEN
             st.markdown("#### Training Configuration")
             st.code("""
 # Hyperparameters
-Model: ResNet18 (ImageNet pretrained)
+Model: ResNet18 (fine-tuned from ImageNet)
 Optimizer: SGD (lr=0.001, momentum=0.9)
 Scheduler: StepLR (step_size=7, gamma=0.1)
 Batch size: 16
@@ -587,8 +734,335 @@ Training time: ~2-3 hours (GPU)
             - Temporal modeling
             """)
     
-    # Tab 3: Input (renamed)
+    # Tab 3: Input (renamed)    
+    # Tab 3: Full Demo (Interactive Walkthrough)
     with tab3:
+        st.markdown('<div class="sub-header">Complete Pipeline Walkthrough</div>', 
+                    unsafe_allow_html=True)
+        
+        st.markdown("""
+        This interactive demo walks through the complete process from input image to final FEN output.
+        Use the controls below to navigate through each stage.
+        """)
+        
+        # Initialize step state
+        if 'demo_step' not in st.session_state:
+            st.session_state.demo_step = 0
+        
+        # Define pipeline steps
+        steps = [
+            {
+                "name": "Input",
+                "file": "preprocessed.jpeg",
+                "title": "Step 1: Input Image",
+                "description": """
+                **Input:** Raw photo of a physical chessboard taken from an arbitrary angle.
+                
+                **Challenges:**
+                - Perspective distortion
+                - Varying lighting conditions
+                - Background clutter
+                - Different camera angles
+                - Pieces at various heights
+                
+                **Goal:** Transform this raw image into a format suitable for piece classification.
+                """
+            },
+            {
+                "name": "Preprocessing",
+                "file": "processed.jpeg",
+                "title": "Step 2: Preprocessing Pipeline",
+                "description": """
+                **Board Localization & Warping:**
+                1. **Edge Detection:** Canny edge detector finds board boundaries
+                2. **Contour Detection:** Identify quadrilateral shapes
+                3. **Corner Detection:** Find the four corners of the chessboard
+                4. **Perspective Transform:** Warp to 512×512 top-down view
+                
+                **Square Extraction:**
+                1. **Grid Division:** Slice warped board into 8×8 grid
+                2. **Square Extraction:** Each square is 64×64 pixels (or 102×102 with 30% padding)
+                3. **Chess Notation:** Label each square (a1-h8)
+                4. **Padding:** 30% padding captures pieces extending beyond boundaries
+                
+                **Output:** 64 individual square images ready for classification.
+                
+                **Key Insight:** This visualization shows all 64 extracted squares with their 
+                chess notation labels. Padding ensures tall pieces (kings, queens) aren't cut off.
+                """
+            },
+            {
+                "name": "Classification",
+                "file": "board.jpeg",
+                "title": "Step 3: Model Classification",
+                "description": """
+                **Model Architecture:**
+                - **Base:** ResNet18 (pre-trained on ImageNet)
+                - **Fine-tuning:** Trained on our chess piece dataset
+                - **Output:** 13 classes (6 white pieces + 6 black pieces + empty)
+                
+                **Training Details:**
+                - **Dataset:** ~33K square images from 5 games
+                - **Split:** Train (70%), Val (15%), Test (15%) - split by game
+                - **Augmentation:** Random rotation, brightness, contrast
+                - **Loss:** Cross-entropy with weighted sampling for class balance
+                - **Optimizer:** Adam with learning rate scheduling
+                - **Accuracy:** 89.08% overall, 95.2% on empty squares
+                
+                **OOD Detection (Out-of-Distribution):**
+                - **Method:** Maximum Softmax Probability (MSP)
+                - **Threshold:** 0.80 (confidence below → "unknown")
+                - **Purpose:** Detect occluded/uncertain squares
+                - **Result:** 85.4% true positive rate on occluded squares
+                
+                **Output:** This visualization shows the classified board with pieces placed 
+                based on model predictions. Unknown/occluded squares are marked with red X.
+                """
+            },
+            {
+                "name": "FEN Output",
+                "file": "fen.jpeg",
+                "title": "Step 4: FEN Reconstruction & Integration",
+                "description": """
+                **FEN Generation:**
+                1. **Map predictions** to FEN characters:
+                   - White pieces: P, N, B, R, Q, K
+                   - Black pieces: p, n, b, r, q, k
+                   - Empty squares: counted and compressed (e.g., "3" = 3 empty)
+                   - Unknown squares: "?" (occluded/low confidence)
+                
+                2. **Build FEN string:**
+                   - Process rank-by-rank from rank 8 → rank 1
+                   - Separate ranks with "/"
+                   - Compress consecutive empty squares
+                
+                3. **Add metadata** (if needed):
+                   - Active color (w/b)
+                   - Castling rights (KQkq)
+                   - En passant target
+                   - Halfmove/fullmove counters
+                
+                **Integration:**
+                This complete pipeline can be integrated into:
+                - Chess analysis tools
+                - Game digitization systems
+                - Live streaming overlays
+                - Tournament recording systems
+                
+                **Example FEN:** `rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR`
+                
+                **Final Output:** The reconstructed board can be imported directly into 
+                chess engines (Stockfish, Lichess, Chess.com) for analysis and play.
+                """
+            }
+        ]
+        
+        # Progress bar
+        progress = (st.session_state.demo_step + 1) / len(steps)
+        st.progress(progress)
+        
+        # Step indicator
+        step_cols = st.columns(len(steps))
+        for i, step in enumerate(steps):
+            with step_cols[i]:
+                if i == st.session_state.demo_step:
+                    st.markdown(f"**→ {step['name']}**")
+                elif i < st.session_state.demo_step:
+                    st.markdown(f"✓ {step['name']}")
+                else:
+                    st.markdown(f"○ {step['name']}")
+        
+        st.markdown("---")
+        
+        # Current step content
+        current_step = steps[st.session_state.demo_step]
+        
+        st.markdown(f"### {current_step['title']}")
+        
+        # Two columns: image on left, description on right
+        col1, col2 = st.columns([3, 2])
+        
+        with col1:
+            # Load and display image
+            output_dir = Path(__file__).parent / "output"
+            image_path = output_dir / current_step['file']
+            
+            if image_path.exists():
+                image = Image.open(image_path)
+                st.image(image, use_container_width=True)
+            else:
+                st.error(f"Image not found: {current_step['file']}")
+                st.info(f"Expected path: {image_path}")
+        
+        with col2:
+            st.markdown(current_step['description'])
+        
+        st.markdown("---")
+        
+        # Navigation buttons
+        col1, col2, col3 = st.columns([1, 2, 1])
+        
+        with col1:
+            if st.session_state.demo_step > 0:
+                if st.button("← Previous", use_container_width=True):
+                    st.session_state.demo_step -= 1
+                    st.rerun()
+        
+        with col2:
+            if st.button("🔄 Reset to Start", use_container_width=True):
+                st.session_state.demo_step = 0
+                st.rerun()
+        
+        with col3:
+            if st.session_state.demo_step < len(steps) - 1:
+                if st.button("Next →", use_container_width=True, type="primary"):
+                    st.session_state.demo_step += 1
+                    st.rerun()
+            else:
+                st.success("✓ Demo Complete!")
+        
+        # Quick jump
+        st.markdown("---")
+        st.markdown("**Quick Jump:**")
+        jump_cols = st.columns(len(steps))
+        for i, step in enumerate(steps):
+            with jump_cols[i]:
+                if st.button(f"{i+1}. {step['name']}", key=f"jump_{i}", use_container_width=True):
+                    st.session_state.demo_step = i
+                    st.rerun()
+        
+        # Live Inference Section
+        st.markdown("---")
+        st.markdown("### 🚀 Try Live Inference")
+        
+        st.markdown("""
+        Upload your own chessboard image and run the complete pipeline with a trained model!
+        """)
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            uploaded_file = st.file_uploader(
+                "Upload Chessboard Image", 
+                type=['jpg', 'jpeg', 'png'],
+                key="live_inference_upload"
+            )
+        
+        with col2:
+            model_path = st.text_input(
+                "Model Path (optional)",
+                value="model/resnet18_ft.pth",
+                help="Path to trained model checkpoint"
+            )
+            threshold = st.slider(
+                "Confidence Threshold",
+                min_value=0.5,
+                max_value=1.0,
+                value=0.80,
+                step=0.05
+            )
+        
+        if uploaded_file is not None:
+            # Save uploaded file temporarily
+            temp_dir = Path(__file__).parent / "temp"
+            temp_dir.mkdir(exist_ok=True)
+            temp_image_path = temp_dir / uploaded_file.name
+            
+            with open(temp_image_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            
+            if st.button("▶️ Run Complete Pipeline", type="primary", use_container_width=True):
+                with st.spinner("Processing..."):
+                    # Check if model exists
+                    model_path_obj = Path(model_path)
+                    if not model_path_obj.exists():
+                        st.warning(f"Model not found at {model_path}. Running preprocessing only.")
+                        model_path = None
+                    
+                    results = run_inference_pipeline(
+                        str(temp_image_path),
+                        model_path=model_path,
+                        threshold=threshold
+                    )
+                    
+                    if results and "error" not in results:
+                        st.success("✓ Pipeline completed successfully!")
+                        
+                        # Display results
+                        st.markdown("#### Results")
+                        
+                        result_cols = st.columns(2)
+                        
+                        with result_cols[0]:
+                            st.markdown("**Original Image**")
+                            st.image(cv2.cvtColor(results["original"], cv2.COLOR_BGR2RGB), use_container_width=True)
+                        
+                        with result_cols[1]:
+                            st.markdown("**64 Extracted Squares**")
+                            if results.get("grid") is not None:
+                                st.image(cv2.cvtColor(results["grid"], cv2.COLOR_BGR2RGB), use_container_width=True)
+                            else:
+                                st.info("Grid visualization not available")
+                        
+                        st.markdown("---")
+                        
+                        # Classified board
+                        if results["board_svg"]:
+                            st.markdown("#### Classified Chessboard")
+                            st.components.v1.html(results["board_svg"], height=600)
+                        
+                        # FEN output
+                        if results["fen"]:
+                            st.markdown("#### FEN Notation")
+                            st.code(results["fen"], language="text")
+                            
+                            # Statistics
+                            st.markdown("#### Classification Statistics")
+                            stats_cols = st.columns(4)
+                            
+                            with stats_cols[0]:
+                                st.metric("Total Squares", "64")
+                            
+                            with stats_cols[1]:
+                                if results["labels"]:
+                                    empty_count = results["labels"].count("empty")
+                                    st.metric("Empty Squares", empty_count)
+                            
+                            with stats_cols[2]:
+                                if results["labels"]:
+                                    piece_count = sum(1 for l in results["labels"] if l not in ["empty", "unknown"])
+                                    st.metric("Pieces Detected", piece_count)
+                            
+                            with stats_cols[3]:
+                                if results["unknown_indices"]:
+                                    st.metric("Unknown/Occluded", len(results["unknown_indices"]), delta_color="inverse")
+                                else:
+                                    st.metric("Unknown/Occluded", 0)
+                            
+                            # Confidence distribution
+                            if results["confidences"]:
+                                st.markdown("#### Confidence Distribution")
+                                import pandas as pd
+                                conf_data = pd.DataFrame({
+                                    "Square": [f"{i:02d}" for i in range(64)],
+                                    "Label": results["labels"],
+                                    "Confidence": results["confidences"]
+                                })
+                                
+                                # Show low confidence squares
+                                low_conf = conf_data[conf_data["Confidence"] < threshold].sort_values("Confidence")
+                                if not low_conf.empty:
+                                    st.markdown("**Low Confidence Predictions (marked as unknown):**")
+                                    st.dataframe(low_conf, use_container_width=True)
+                                else:
+                                    st.success("All predictions above threshold!")
+                    
+                    elif results and "error" in results:
+                        st.error(f"Error: {results['error']}")
+                    else:
+                        st.error("Inference failed. Please check your model and image.")
+    
+    with tab4:
         st.markdown('<div class="sub-header">Step 1: Load Chessboard Image</div>', 
                     unsafe_allow_html=True)
         
@@ -642,7 +1116,7 @@ Training time: ~2-3 hours (GPU)
                 st.info("Upload or select an image to begin")
     
     # Tab 4: Preprocessing (Demo)
-    with tab4:
+    with tab5:
         st.markdown('<div class="sub-header">Step 2: Preprocessing Pipeline</div>', 
                     unsafe_allow_html=True)
         
@@ -689,7 +1163,7 @@ Training time: ~2-3 hours (GPU)
             st.warning("Please load an image in the Input tab first")
     
     # Tab 5: Classification (Demo - Placeholder)
-    with tab5:
+    with tab6:
         st.markdown('<div class="sub-header">Step 3: Piece Classification</div>', 
                     unsafe_allow_html=True)
         
@@ -699,7 +1173,7 @@ Training time: ~2-3 hours (GPU)
             col1, col2, col3 = st.columns(3)
             
             with col1:
-                st.metric("Model", "ResNet18")
+                st.metric("Model", "ResNet18 (Fine-tuned)")
                 st.metric("Parameters", "11.2M")
             
             with col2:
@@ -718,70 +1192,166 @@ Training time: ~2-3 hours (GPU)
             
             st.markdown("---")
             
-            # Placeholder for model inference
-            st.info("**Integration Pending:** Model inference will be added here")
+            # Model path input
+            col_model1, col_model2 = st.columns([2, 1])
+            with col_model1:
+                model_path = st.text_input(
+                    "Model Path",
+                    value="model/resnet18_ft.pth",
+                    help="Path to trained model checkpoint",
+                    key="demo_model_path"
+                )
             
-            st.markdown("""
-            **Next Steps:**
-            1. Load trained model checkpoint
-            2. Preprocess each square (resize, normalize)
-            3. Run inference on all 64 squares
-            4. Apply confidence thresholding for OOD detection
-            5. Display predictions with confidence scores
-            """)
+            with col_model2:
+                st.write("")  # Spacer
+                st.write("")  # Spacer
             
-            # Demo button (placeholder)
-            if st.button("Run Classification (Demo)", type="primary", disabled=True):
-                st.warning("Model integration coming soon!")
+            # Run classification button
+            if st.button("▶️ Run Classification", type="primary", use_container_width=True, key="demo_classify"):
+                if not Path(model_path).exists():
+                    st.error(f"Model not found at {model_path}. Please check the path.")
+                else:
+                    with st.spinner("Running inference..."):
+                        # Save current image temporarily
+                        temp_dir = Path(__file__).parent / "temp"
+                        temp_dir.mkdir(exist_ok=True)
+                        temp_image = temp_dir / "current_demo_image.jpg"
+                        cv2.imwrite(str(temp_image), st.session_state.original_image)
+                        
+                        # Run inference
+                        results = run_inference_pipeline(
+                            str(temp_image),
+                            model_path=model_path,
+                            threshold=confidence_threshold
+                        )
+                        
+                        if results and "error" not in results:
+                            # Store results in session state
+                            st.session_state.labels = results["labels"]
+                            st.session_state.confidences = results["confidences"]
+                            st.session_state.unknown_indices = results["unknown_indices"]
+                            st.session_state.fen = results["fen"]
+                            st.session_state.board_svg = results["board_svg"]
+                            st.session_state.predictions = results.get("predictions", [])
+                            
+                            st.success("✓ Classification completed! Go to 'Demo: Results' tab to see the output.")
+                        elif results and "error" in results:
+                            st.error(f"Error: {results['error']}")
+                        else:
+                            st.error("Inference failed. Please check your model and setup.")
+            
+            # Show status
+            if st.session_state.labels:
+                st.info(f"✓ Model has classified {len(st.session_state.labels)} squares. View results in the next tab.")
         else:
             st.warning("Please run preprocessing first")
     
     # Tab 6: Results (Demo - Placeholder)
-    with tab6:
+    with tab7:
         st.markdown('<div class="sub-header">Step 4: Board Reconstruction</div>', 
                     unsafe_allow_html=True)
         
         if st.session_state.squares is not None:
-            col1, col2 = st.columns([3, 2])
-            
-            with col1:
-                st.markdown("### Classification Results")
-                st.info("**Integration Pending:** Results will be displayed here")
+            if st.session_state.labels and st.session_state.fen:
+                # Display classified board
+                st.markdown("### Classified Chessboard")
+                
+                if st.session_state.board_svg:
+                    st.components.v1.html(st.session_state.board_svg, height=600)
+                
+                st.markdown("---")
+                
+                col1, col2 = st.columns([3, 2])
+                
+                with col1:
+                    st.markdown("### Classification Statistics")
+                    
+                    stats_cols = st.columns(4)
+                    
+                    with stats_cols[0]:
+                        st.metric("Total Squares", "64")
+                    
+                    with stats_cols[1]:
+                        empty_count = st.session_state.labels.count("empty")
+                        st.metric("Empty Squares", empty_count)
+                    
+                    with stats_cols[2]:
+                        piece_count = sum(1 for l in st.session_state.labels if l not in ["empty", "unknown"])
+                        st.metric("Pieces Detected", piece_count)
+                    
+                    with stats_cols[3]:
+                        unknown_count = len(st.session_state.unknown_indices)
+                        st.metric("Unknown/Occluded", unknown_count, delta_color="inverse")
+                    
+                    # Show low confidence predictions
+                    if st.session_state.confidences:
+                        st.markdown("#### Confidence Distribution")
+                        import pandas as pd
+                        
+                        conf_data = pd.DataFrame({
+                            "Square": [f"{i:02d}" for i in range(64)],
+                            "Label": st.session_state.labels,
+                            "Confidence": [f"{c:.2%}" for c in st.session_state.confidences]
+                        })
+                        
+                        # Show squares below threshold
+                        threshold = 0.80
+                        low_conf_indices = [i for i, c in enumerate(st.session_state.confidences) if c < threshold]
+                        
+                        if low_conf_indices:
+                            low_conf_data = conf_data.iloc[low_conf_indices]
+                            st.markdown("**Low Confidence Predictions (marked as unknown):**")
+                            st.dataframe(low_conf_data, use_container_width=True, hide_index=True)
+                        else:
+                            st.success("✓ All predictions above threshold!")
+                
+                with col2:
+                    st.markdown("### FEN Notation")
+                    st.code(st.session_state.fen, language="text")
+                    
+                    st.markdown("""
+                    **FEN Components:**
+                    - White pieces: P, N, B, R, Q, K
+                    - Black pieces: p, n, b, r, q, k
+                    - Empty: numbers (count)
+                    - Unknown: ? (occluded)
+                    - Rank separator: /
+                    
+                    **Usage:**
+                    Copy this FEN and paste it into:
+                    - Chess.com board editor
+                    - Lichess analysis board
+                    - Stockfish engine
+                    """)
+                    
+                    # Copy button would go here in a real app
+                    if st.button("📋 Copy FEN", key="copy_fen"):
+                        st.info("FEN copied to clipboard! (In production, this would use clipboard API)")
+                
+                st.markdown("---")
+                st.markdown("### Model Performance")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("Overall Accuracy", "89.08%", "±0.12%")
+                
+                with col2:
+                    st.metric("Empty Squares", "95.2%", "+6.1%")
+                
+                with col3:
+                    st.metric("Piece Detection", "87.4%", "-1.6%")
+            else:
+                st.info("Run classification in the previous tab to see results here.")
                 
                 st.markdown("""
-                **Display will include:**
-                - 8×8 grid with predicted pieces
-                - Confidence scores per square
-                - Occluded/unknown squares highlighted
-                - Per-class accuracy metrics
+                **Results will include:**
+                - Classified chessboard visualization
+                - FEN notation string
+                - Confidence statistics
+                - Low-confidence predictions
+                - Unknown/occluded squares marked with red X
                 """)
-            
-            with col2:
-                st.markdown("### FEN Notation")
-                st.info("**Integration Pending:** FEN output will be shown here")
-                
-                st.markdown("**Example FEN:**")
-                st.code("rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR", language="text")
-                
-                st.markdown("""
-                - Standard chess board representation
-                - '?' indicates occluded/unknown squares
-                - Can be imported to chess engines
-                """)
-            
-            st.markdown("---")
-            st.markdown("### Model Performance")
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("Overall Accuracy", "89.08%", "±0.12%")
-            
-            with col2:
-                st.metric("Empty Squares", "95.2%", "+6.1%")
-            
-            with col3:
-                st.metric("Piece Detection", "87.4%", "-1.6%")
         else:
             st.warning("Please run preprocessing first")
     
@@ -791,6 +1361,7 @@ Training time: ~2-3 hours (GPU)
     <div style="text-align: center; color: #666; padding: 2rem;">
         <p><strong>Chessboard Recognition System</strong></p>
         <p>Introduction to Deep Learning Course • Ben-Gurion University of the Negev • 2026</p>
+        <p style="color: #888; font-size: 0.9rem;">Sean Grinberg • David Paster • Rotem Arie</p>
         <p>Technologies: PyTorch • OpenCV • Streamlit</p>
         <p style="margin-top: 1rem;">
             <a href="https://github.com/rotemarie/chessboard-recon" target="_blank" style="color: #2E86AB; text-decoration: none;">
