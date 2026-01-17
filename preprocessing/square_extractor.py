@@ -235,7 +235,10 @@ def test_extractor():
     """
     Test the square extractor on a sample warped board.
     """
-    from board_detector import BoardDetector
+    try:
+        from .board_detector import BoardDetector
+    except ImportError:
+        from board_detector import BoardDetector
     import os
     
     # Path to sample image
