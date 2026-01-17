@@ -89,6 +89,7 @@ logs/
 tensorboard/
 wandb/
 *.log
+outputs/
 
 # Temporary files
 *.tmp
