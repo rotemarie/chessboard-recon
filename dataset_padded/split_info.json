@@ -1,0 +1,59 @@
+{
+  "seed": 42,
+  "val_ratio": 0.15,
+  "test_ratio": 0.15,
+  "game_assignments": {
+    "game6": "train",
+    "game4": "train",
+    "game5": "train",
+    "game7": "val",
+    "game2": "test"
+  },
+  "statistics": {
+    "train": {
+      "black_queen": 176,
+      "empty": 17767,
+      "black_bishop": 383,
+      "black_king": 386,
+      "white_pawn": 1828,
+      "white_rook": 476,
+      "black_knight": 231,
+      "black_pawn": 1669,
+      "white_queen": 177,
+      "white_king": 385,
+      "white_bishop": 311,
+      "white_knight": 387,
+      "black_rook": 466
+    },
+    "val": {
+      "black_queen": 55,
+      "empty": 1947,
+      "black_bishop": 99,
+      "black_king": 55,
+      "white_pawn": 390,
+      "white_rook": 93,
+      "black_knight": 82,
+      "black_pawn": 388,
+      "white_queen": 55,
+      "white_king": 55,
+      "white_bishop": 111,
+      "white_knight": 82,
+      "black_rook": 110
+    },
+    "test": {
+      "black_queen": 39,
+      "empty": 3179,
+      "black_bishop": 56,
+      "black_king": 77,
+      "white_pawn": 524,
+      "white_rook": 122,
+      "black_knight": 56,
+      "black_pawn": 520,
+      "white_queen": 40,
+      "white_king": 77,
+      "white_bishop": 54,
+      "white_knight": 60,
+      "black_rook": 124
+    }
+  }
+}
