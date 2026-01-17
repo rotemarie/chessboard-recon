@@ -228,8 +228,8 @@ def main():
         """)
     
     # Main content
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "Project Overview", "Pipeline", "Demo: Input", "Demo: Preprocessing", "Demo: Classification", "Demo: Results"
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        "Project Overview", "Pipeline", "Full Demo", "Demo: Input", "Demo: Preprocessing", "Demo: Classification", "Demo: Results"
     ])
     
     # Tab 1: Project Overview
@@ -587,8 +587,176 @@ Training time: ~2-3 hours (GPU)
             - Temporal modeling
             """)
     
-    # Tab 3: Input (renamed)
+    # Tab 3: Input (renamed)    
+    # Tab 3: Full Demo (Interactive Walkthrough)
     with tab3:
+        st.markdown('<div class="sub-header">Complete Pipeline Walkthrough</div>', 
+                    unsafe_allow_html=True)
+        
+        st.markdown("""
+        This interactive demo walks through the complete process from input image to final FEN output.
+        Use the controls below to navigate through each stage.
+        """)
+        
+        # Initialize step state
+        if 'demo_step' not in st.session_state:
+            st.session_state.demo_step = 0
+        
+        # Define pipeline steps
+        steps = [
+            {
+                "name": "Input Image",
+                "file": "preprocessed.jpeg",
+                "title": "Step 1: Original Chessboard Image",
+                "description": """
+                **Input:** Raw photo of a physical chessboard taken from an arbitrary angle.
+                
+                **Challenges:**
+                - Perspective distortion
+                - Varying lighting conditions
+                - Background clutter
+                - Different camera angles
+                
+                **Goal:** Locate and extract the chessboard from this image.
+                """
+            },
+            {
+                "name": "Board Detection",
+                "file": "board.jpeg",
+                "title": "Step 2: Board Localization & Warping",
+                "description": """
+                **Process:**
+                1. **Edge Detection:** Canny edge detector finds board boundaries
+                2. **Contour Detection:** Identify quadrilateral shapes
+                3. **Corner Detection:** Find the four corners of the chessboard
+                4. **Perspective Transform:** Warp to 512×512 top-down view
+                
+                **Output:** Perfectly aligned 8×8 grid ready for square extraction.
+                
+                **Key Insight:** This normalization step is crucial - it standardizes all boards
+                to the same size and orientation, making classification much easier.
+                """
+            },
+            {
+                "name": "Square Extraction",
+                "file": "processed.jpeg",
+                "title": "Step 3: 64 Square Extraction",
+                "description": """
+                **Process:**
+                1. **Grid Division:** Slice 512×512 board into 8×8 grid
+                2. **Square Extraction:** Each square is 64×64 pixels (or 102×102 with 30% padding)
+                3. **Chess Notation:** Label each square (a1-h8)
+                4. **Ordering:** Iterate row-by-row from top (rank 8) to bottom (rank 1)
+                
+                **Output:** 64 individual square images, each ready for classification.
+                
+                **Dataset:** These 64 crops become the input to our classifier.
+                With padding, we capture pieces that extend beyond square boundaries.
+                """
+            },
+            {
+                "name": "FEN Output",
+                "file": "fen.jpeg",
+                "title": "Step 4: Classification & FEN Reconstruction",
+                "description": """
+                **Classification:**
+                - **Model:** ResNet18 fine-tuned on chess piece dataset
+                - **Input:** 64 square images (224×224 after preprocessing)
+                - **Output:** 13-class predictions (12 pieces + empty)
+                - **OOD Detection:** Confidence threshold (0.80) flags uncertain squares
+                
+                **FEN Generation:**
+                1. Map predictions to FEN characters:
+                   - White pieces: P, N, B, R, Q, K
+                   - Black pieces: p, n, b, r, q, k
+                   - Empty: count consecutive empties (e.g., "3" means 3 empty)
+                   - Unknown: ? (for occluded squares)
+                2. Concatenate ranks separated by "/"
+                3. Add game state metadata (active color, castling, etc.)
+                
+                **Final Output:** Complete board state in FEN notation, 
+                ready for chess engines, analysis, or game replay.
+                
+                **Example:** `rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR`
+                """
+            }
+        ]
+        
+        # Progress bar
+        progress = (st.session_state.demo_step + 1) / len(steps)
+        st.progress(progress)
+        
+        # Step indicator
+        step_cols = st.columns(len(steps))
+        for i, step in enumerate(steps):
+            with step_cols[i]:
+                if i == st.session_state.demo_step:
+                    st.markdown(f"**→ {step['name']}**")
+                elif i < st.session_state.demo_step:
+                    st.markdown(f"✓ {step['name']}")
+                else:
+                    st.markdown(f"○ {step['name']}")
+        
+        st.markdown("---")
+        
+        # Current step content
+        current_step = steps[st.session_state.demo_step]
+        
+        st.markdown(f"### {current_step['title']}")
+        
+        # Two columns: image on left, description on right
+        col1, col2 = st.columns([3, 2])
+        
+        with col1:
+            # Load and display image
+            output_dir = Path(__file__).parent / "output"
+            image_path = output_dir / current_step['file']
+            
+            if image_path.exists():
+                image = Image.open(image_path)
+                st.image(image, use_container_width=True)
+            else:
+                st.error(f"Image not found: {current_step['file']}")
+                st.info(f"Expected path: {image_path}")
+        
+        with col2:
+            st.markdown(current_step['description'])
+        
+        st.markdown("---")
+        
+        # Navigation buttons
+        col1, col2, col3 = st.columns([1, 2, 1])
+        
+        with col1:
+            if st.session_state.demo_step > 0:
+                if st.button("← Previous", use_container_width=True):
+                    st.session_state.demo_step -= 1
+                    st.rerun()
+        
+        with col2:
+            if st.button("🔄 Reset to Start", use_container_width=True):
+                st.session_state.demo_step = 0
+                st.rerun()
+        
+        with col3:
+            if st.session_state.demo_step < len(steps) - 1:
+                if st.button("Next →", use_container_width=True, type="primary"):
+                    st.session_state.demo_step += 1
+                    st.rerun()
+            else:
+                st.success("✓ Demo Complete!")
+        
+        # Quick jump
+        st.markdown("---")
+        st.markdown("**Quick Jump:**")
+        jump_cols = st.columns(len(steps))
+        for i, step in enumerate(steps):
+            with jump_cols[i]:
+                if st.button(f"{i+1}. {step['name']}", key=f"jump_{i}", use_container_width=True):
+                    st.session_state.demo_step = i
+                    st.rerun()
+    
+    with tab4:
         st.markdown('<div class="sub-header">Step 1: Load Chessboard Image</div>', 
                     unsafe_allow_html=True)
         
@@ -642,7 +810,7 @@ Training time: ~2-3 hours (GPU)
                 st.info("Upload or select an image to begin")
     
     # Tab 4: Preprocessing (Demo)
-    with tab4:
+    with tab5:
         st.markdown('<div class="sub-header">Step 2: Preprocessing Pipeline</div>', 
                     unsafe_allow_html=True)
         
@@ -689,7 +857,7 @@ Training time: ~2-3 hours (GPU)
             st.warning("Please load an image in the Input tab first")
     
     # Tab 5: Classification (Demo - Placeholder)
-    with tab5:
+    with tab6:
         st.markdown('<div class="sub-header">Step 3: Piece Classification</div>', 
                     unsafe_allow_html=True)
         
@@ -737,7 +905,7 @@ Training time: ~2-3 hours (GPU)
             st.warning("Please run preprocessing first")
     
     # Tab 6: Results (Demo - Placeholder)
-    with tab6:
+    with tab7:
         st.markdown('<div class="sub-header">Step 4: Board Reconstruction</div>', 
                     unsafe_allow_html=True)
         
