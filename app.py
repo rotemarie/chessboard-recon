@@ -1192,21 +1192,57 @@ Training time: ~2-3 hours (GPU)
             
             st.markdown("---")
             
-            # Placeholder for model inference
-            st.info("**Integration Pending:** Model inference will be added here")
+            # Model path input
+            col_model1, col_model2 = st.columns([2, 1])
+            with col_model1:
+                model_path = st.text_input(
+                    "Model Path",
+                    value="model/resnet18_ft.pth",
+                    help="Path to trained model checkpoint",
+                    key="demo_model_path"
+                )
             
-            st.markdown("""
-            **Next Steps:**
-            1. Load trained model checkpoint
-            2. Preprocess each square (resize, normalize)
-            3. Run inference on all 64 squares
-            4. Apply confidence thresholding for OOD detection
-            5. Display predictions with confidence scores
-            """)
+            with col_model2:
+                st.write("")  # Spacer
+                st.write("")  # Spacer
             
-            # Demo button (placeholder)
-            if st.button("Run Classification (Demo)", type="primary", disabled=True):
-                st.warning("Model integration coming soon!")
+            # Run classification button
+            if st.button("▶️ Run Classification", type="primary", use_container_width=True, key="demo_classify"):
+                if not Path(model_path).exists():
+                    st.error(f"Model not found at {model_path}. Please check the path.")
+                else:
+                    with st.spinner("Running inference..."):
+                        # Save current image temporarily
+                        temp_dir = Path(__file__).parent / "temp"
+                        temp_dir.mkdir(exist_ok=True)
+                        temp_image = temp_dir / "current_demo_image.jpg"
+                        cv2.imwrite(str(temp_image), st.session_state.original_image)
+                        
+                        # Run inference
+                        results = run_inference_pipeline(
+                            str(temp_image),
+                            model_path=model_path,
+                            threshold=confidence_threshold
+                        )
+                        
+                        if results and "error" not in results:
+                            # Store results in session state
+                            st.session_state.labels = results["labels"]
+                            st.session_state.confidences = results["confidences"]
+                            st.session_state.unknown_indices = results["unknown_indices"]
+                            st.session_state.fen = results["fen"]
+                            st.session_state.board_svg = results["board_svg"]
+                            st.session_state.predictions = results.get("predictions", [])
+                            
+                            st.success("✓ Classification completed! Go to 'Demo: Results' tab to see the output.")
+                        elif results and "error" in results:
+                            st.error(f"Error: {results['error']}")
+                        else:
+                            st.error("Inference failed. Please check your model and setup.")
+            
+            # Show status
+            if st.session_state.labels:
+                st.info(f"✓ Model has classified {len(st.session_state.labels)} squares. View results in the next tab.")
         else:
             st.warning("Please run preprocessing first")
     
@@ -1216,46 +1252,106 @@ Training time: ~2-3 hours (GPU)
                     unsafe_allow_html=True)
         
         if st.session_state.squares is not None:
-            col1, col2 = st.columns([3, 2])
-            
-            with col1:
-                st.markdown("### Classification Results")
-                st.info("**Integration Pending:** Results will be displayed here")
+            if st.session_state.labels and st.session_state.fen:
+                # Display classified board
+                st.markdown("### Classified Chessboard")
+                
+                if st.session_state.board_svg:
+                    st.components.v1.html(st.session_state.board_svg, height=600)
+                
+                st.markdown("---")
+                
+                col1, col2 = st.columns([3, 2])
+                
+                with col1:
+                    st.markdown("### Classification Statistics")
+                    
+                    stats_cols = st.columns(4)
+                    
+                    with stats_cols[0]:
+                        st.metric("Total Squares", "64")
+                    
+                    with stats_cols[1]:
+                        empty_count = st.session_state.labels.count("empty")
+                        st.metric("Empty Squares", empty_count)
+                    
+                    with stats_cols[2]:
+                        piece_count = sum(1 for l in st.session_state.labels if l not in ["empty", "unknown"])
+                        st.metric("Pieces Detected", piece_count)
+                    
+                    with stats_cols[3]:
+                        unknown_count = len(st.session_state.unknown_indices)
+                        st.metric("Unknown/Occluded", unknown_count, delta_color="inverse")
+                    
+                    # Show low confidence predictions
+                    if st.session_state.confidences:
+                        st.markdown("#### Confidence Distribution")
+                        import pandas as pd
+                        
+                        conf_data = pd.DataFrame({
+                            "Square": [f"{i:02d}" for i in range(64)],
+                            "Label": st.session_state.labels,
+                            "Confidence": [f"{c:.2%}" for c in st.session_state.confidences]
+                        })
+                        
+                        # Show squares below threshold
+                        threshold = 0.80
+                        low_conf_indices = [i for i, c in enumerate(st.session_state.confidences) if c < threshold]
+                        
+                        if low_conf_indices:
+                            low_conf_data = conf_data.iloc[low_conf_indices]
+                            st.markdown("**Low Confidence Predictions (marked as unknown):**")
+                            st.dataframe(low_conf_data, use_container_width=True, hide_index=True)
+                        else:
+                            st.success("✓ All predictions above threshold!")
+                
+                with col2:
+                    st.markdown("### FEN Notation")
+                    st.code(st.session_state.fen, language="text")
+                    
+                    st.markdown("""
+                    **FEN Components:**
+                    - White pieces: P, N, B, R, Q, K
+                    - Black pieces: p, n, b, r, q, k
+                    - Empty: numbers (count)
+                    - Unknown: ? (occluded)
+                    - Rank separator: /
+                    
+                    **Usage:**
+                    Copy this FEN and paste it into:
+                    - Chess.com board editor
+                    - Lichess analysis board
+                    - Stockfish engine
+                    """)
+                    
+                    # Copy button would go here in a real app
+                    if st.button("📋 Copy FEN", key="copy_fen"):
+                        st.info("FEN copied to clipboard! (In production, this would use clipboard API)")
+                
+                st.markdown("---")
+                st.markdown("### Model Performance")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("Overall Accuracy", "89.08%", "±0.12%")
+                
+                with col2:
+                    st.metric("Empty Squares", "95.2%", "+6.1%")
+                
+                with col3:
+                    st.metric("Piece Detection", "87.4%", "-1.6%")
+            else:
+                st.info("Run classification in the previous tab to see results here.")
                 
                 st.markdown("""
-                **Display will include:**
-                - 8×8 grid with predicted pieces
-                - Confidence scores per square
-                - Occluded/unknown squares highlighted
-                - Per-class accuracy metrics
+                **Results will include:**
+                - Classified chessboard visualization
+                - FEN notation string
+                - Confidence statistics
+                - Low-confidence predictions
+                - Unknown/occluded squares marked with red X
                 """)
-            
-            with col2:
-                st.markdown("### FEN Notation")
-                st.info("**Integration Pending:** FEN output will be shown here")
-                
-                st.markdown("**Example FEN:**")
-                st.code("rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR", language="text")
-                
-                st.markdown("""
-                - Standard chess board representation
-                - '?' indicates occluded/unknown squares
-                - Can be imported to chess engines
-                """)
-            
-            st.markdown("---")
-            st.markdown("### Model Performance")
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("Overall Accuracy", "89.08%", "±0.12%")
-            
-            with col2:
-                st.metric("Empty Squares", "95.2%", "+6.1%")
-            
-            with col3:
-                st.metric("Piece Detection", "87.4%", "-1.6%")
         else:
             st.warning("Please run preprocessing first")
     
