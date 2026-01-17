@@ -919,127 +919,127 @@ Training time: ~2-3 hours (GPU)
         st.markdown("""
         Upload your own chessboard image and run the complete pipeline with a trained model!
         """)
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            uploaded_file = st.file_uploader(
+                "Upload Chessboard Image", 
+                type=['jpg', 'jpeg', 'png'],
+                key="live_inference_upload"
+            )
+        
+        with col2:
+            model_path = st.text_input(
+                "Model Path (optional)",
+                value="model/resnet18_ft.pth",
+                help="Path to trained model checkpoint"
+            )
+            threshold = st.slider(
+                "Confidence Threshold",
+                min_value=0.5,
+                max_value=1.0,
+                value=0.80,
+                step=0.05
+            )
+        
+        if uploaded_file is not None:
+            # Save uploaded file temporarily
+            temp_dir = Path(__file__).parent / "temp"
+            temp_dir.mkdir(exist_ok=True)
+            temp_image_path = temp_dir / uploaded_file.name
             
-            col1, col2 = st.columns([2, 1])
+            with open(temp_image_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
             
-            with col1:
-                uploaded_file = st.file_uploader(
-                    "Upload Chessboard Image", 
-                    type=['jpg', 'jpeg', 'png'],
-                    key="live_inference_upload"
-                )
-            
-            with col2:
-                model_path = st.text_input(
-                    "Model Path (optional)",
-                    value="model/resnet18_ft.pth",
-                    help="Path to trained model checkpoint"
-                )
-                threshold = st.slider(
-                    "Confidence Threshold",
-                    min_value=0.5,
-                    max_value=1.0,
-                    value=0.80,
-                    step=0.05
-                )
-            
-            if uploaded_file is not None:
-                # Save uploaded file temporarily
-                temp_dir = Path(__file__).parent / "temp"
-                temp_dir.mkdir(exist_ok=True)
-                temp_image_path = temp_dir / uploaded_file.name
-                
-                with open(temp_image_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
-                
-                if st.button("▶️ Run Complete Pipeline", type="primary", use_container_width=True):
-                    with st.spinner("Processing..."):
-                        # Check if model exists
-                        model_path_obj = Path(model_path)
-                        if not model_path_obj.exists():
-                            st.warning(f"Model not found at {model_path}. Running preprocessing only.")
-                            model_path = None
+            if st.button("▶️ Run Complete Pipeline", type="primary", use_container_width=True):
+                with st.spinner("Processing..."):
+                    # Check if model exists
+                    model_path_obj = Path(model_path)
+                    if not model_path_obj.exists():
+                        st.warning(f"Model not found at {model_path}. Running preprocessing only.")
+                        model_path = None
+                    
+                    results = run_inference_pipeline(
+                        str(temp_image_path),
+                        model_path=model_path,
+                        threshold=threshold
+                    )
+                    
+                    if results and "error" not in results:
+                        st.success("✓ Pipeline completed successfully!")
                         
-                        results = run_inference_pipeline(
-                            str(temp_image_path),
-                            model_path=model_path,
-                            threshold=threshold
-                        )
+                        # Display results
+                        st.markdown("#### Results")
                         
-                        if results and "error" not in results:
-                            st.success("✓ Pipeline completed successfully!")
+                        result_cols = st.columns(3)
+                        
+                        with result_cols[0]:
+                            st.markdown("**Original Image**")
+                            st.image(cv2.cvtColor(results["original"], cv2.COLOR_BGR2RGB))
+                        
+                        with result_cols[1]:
+                            st.markdown("**Warped Board**")
+                            st.image(cv2.cvtColor(results["warped"], cv2.COLOR_BGR2RGB))
+                        
+                        with result_cols[2]:
+                            if results["board_svg"]:
+                                st.markdown("**Classified Board**")
+                                st.components.v1.html(results["board_svg"], height=550)
+                            else:
+                                st.markdown("**Square Extraction**")
+                                st.info("Model not loaded - only preprocessing performed")
+                        
+                        # FEN output
+                        if results["fen"]:
+                            st.markdown("#### FEN Notation")
+                            st.code(results["fen"], language="text")
                             
-                            # Display results
-                            st.markdown("#### Results")
+                            # Statistics
+                            st.markdown("#### Classification Statistics")
+                            stats_cols = st.columns(4)
                             
-                            result_cols = st.columns(3)
+                            with stats_cols[0]:
+                                st.metric("Total Squares", "64")
                             
-                            with result_cols[0]:
-                                st.markdown("**Original Image**")
-                                st.image(cv2.cvtColor(results["original"], cv2.COLOR_BGR2RGB))
+                            with stats_cols[1]:
+                                if results["labels"]:
+                                    empty_count = results["labels"].count("empty")
+                                    st.metric("Empty Squares", empty_count)
                             
-                            with result_cols[1]:
-                                st.markdown("**Warped Board**")
-                                st.image(cv2.cvtColor(results["warped"], cv2.COLOR_BGR2RGB))
+                            with stats_cols[2]:
+                                if results["labels"]:
+                                    piece_count = sum(1 for l in results["labels"] if l not in ["empty", "unknown"])
+                                    st.metric("Pieces Detected", piece_count)
                             
-                            with result_cols[2]:
-                                if results["board_svg"]:
-                                    st.markdown("**Classified Board**")
-                                    st.components.v1.html(results["board_svg"], height=550)
+                            with stats_cols[3]:
+                                if results["unknown_indices"]:
+                                    st.metric("Unknown/Occluded", len(results["unknown_indices"]), delta_color="inverse")
                                 else:
-                                    st.markdown("**Square Extraction**")
-                                    st.info("Model not loaded - only preprocessing performed")
+                                    st.metric("Unknown/Occluded", 0)
                             
-                            # FEN output
-                            if results["fen"]:
-                                st.markdown("#### FEN Notation")
-                                st.code(results["fen"], language="text")
+                            # Confidence distribution
+                            if results["confidences"]:
+                                st.markdown("#### Confidence Distribution")
+                                import pandas as pd
+                                conf_data = pd.DataFrame({
+                                    "Square": [f"{i:02d}" for i in range(64)],
+                                    "Label": results["labels"],
+                                    "Confidence": results["confidences"]
+                                })
                                 
-                                # Statistics
-                                st.markdown("#### Classification Statistics")
-                                stats_cols = st.columns(4)
-                                
-                                with stats_cols[0]:
-                                    st.metric("Total Squares", "64")
-                                
-                                with stats_cols[1]:
-                                    if results["labels"]:
-                                        empty_count = results["labels"].count("empty")
-                                        st.metric("Empty Squares", empty_count)
-                                
-                                with stats_cols[2]:
-                                    if results["labels"]:
-                                        piece_count = sum(1 for l in results["labels"] if l not in ["empty", "unknown"])
-                                        st.metric("Pieces Detected", piece_count)
-                                
-                                with stats_cols[3]:
-                                    if results["unknown_indices"]:
-                                        st.metric("Unknown/Occluded", len(results["unknown_indices"]), delta_color="inverse")
-                                    else:
-                                        st.metric("Unknown/Occluded", 0)
-                                
-                                # Confidence distribution
-                                if results["confidences"]:
-                                    st.markdown("#### Confidence Distribution")
-                                    import pandas as pd
-                                    conf_data = pd.DataFrame({
-                                        "Square": [f"{i:02d}" for i in range(64)],
-                                        "Label": results["labels"],
-                                        "Confidence": results["confidences"]
-                                    })
-                                    
-                                    # Show low confidence squares
-                                    low_conf = conf_data[conf_data["Confidence"] < threshold].sort_values("Confidence")
-                                    if not low_conf.empty:
-                                        st.markdown("**Low Confidence Predictions (marked as unknown):**")
-                                        st.dataframe(low_conf, use_container_width=True)
-                                    else:
-                                        st.success("All predictions above threshold!")
-                        
-                        elif results and "error" in results:
-                            st.error(f"Error: {results['error']}")
-                        else:
-                            st.error("Inference failed. Please check your model and image.")
+                                # Show low confidence squares
+                                low_conf = conf_data[conf_data["Confidence"] < threshold].sort_values("Confidence")
+                                if not low_conf.empty:
+                                    st.markdown("**Low Confidence Predictions (marked as unknown):**")
+                                    st.dataframe(low_conf, use_container_width=True)
+                                else:
+                                    st.success("All predictions above threshold!")
+                    
+                    elif results and "error" in results:
+                        st.error(f"Error: {results['error']}")
+                    else:
+                        st.error("Inference failed. Please check your model and image.")
     
     with tab4:
         st.markdown('<div class="sub-header">Step 1: Load Chessboard Image</div>', 
