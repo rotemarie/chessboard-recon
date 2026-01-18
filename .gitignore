@@ -39,6 +39,9 @@ venv.bak/
 *.swo
 *~
 
+# Internal documentation (not for repo)
+APP_README.md
+
 # macOS
 .DS_Store
 .AppleDouble

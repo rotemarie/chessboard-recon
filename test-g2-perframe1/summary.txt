@@ -1,0 +1,22 @@
+Frame: 588
+FEN: rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR
+Image: /Users/rotemar/Documents/BGU/Intro to Deep Learning/final project/chessboard-recon/data/per_frame/game2_per_frame/tagged_images/frame_000588.jpg
+
+Original size: (480, 480, 3)
+Warped size: (512, 512, 3)
+Squares extracted: 64
+
+Class distribution:
+  black_bishop        :  2 squares
+  black_king          :  1 squares
+  black_knight        :  2 squares
+  black_pawn          :  8 squares
+  black_queen         :  1 squares
+  black_rook          :  2 squares
+  empty               : 32 squares
+  white_bishop        :  2 squares
+  white_king          :  1 squares
+  white_knight        :  2 squares
+  white_pawn          :  8 squares
+  white_queen         :  1 squares
+  white_rook          :  2 squares

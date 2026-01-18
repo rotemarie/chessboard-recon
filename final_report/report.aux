@@ -1,0 +1,91 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{roboflow}
+\citation{hendrycks2017baseline}
+\citation{liang2018enhancing}
+\citation{lee2018simple}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {I-A}}Problem Statement}{1}{subsection.1.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {I-B}}Contributions}{1}{subsection.1.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {II}Related Work}{1}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-A}}Chess Recognition Systems}{1}{subsection.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-B}}Out-of-Distribution Detection}{1}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {III}Methodology}{2}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-A}}System Architecture}{2}{subsection.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}Preprocessing Pipeline}{2}{subsection.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-B}1}Board Detection and Warping}{2}{subsubsection.3.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-B}2}Square Extraction}{2}{subsubsection.3.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-B}3}FEN Parsing}{2}{subsubsection.3.2.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Example input: Real chessboard image captured at an angle with varying lighting conditions.}}{2}{figure.1}\protected@file@percent }
+\newlabel{fig:demo_input}{{1}{2}{Example input: Real chessboard image captured at an angle with varying lighting conditions}{figure.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Warped board after perspective transformation: Top-down view normalized to 512×512 pixels.}}{2}{figure.2}\protected@file@percent }
+\newlabel{fig:demo_warped}{{2}{2}{Warped board after perspective transformation: Top-down view normalized to 512×512 pixels}{figure.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Dataset}{2}{subsection.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-C}1}Data Collection}{2}{subsubsection.3.3.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Grid of 64 extracted squares (8×8) ready for classification. Each square is 64×64 pixels.}}{3}{figure.3}\protected@file@percent }
+\newlabel{fig:demo_squares}{{3}{3}{Grid of 64 extracted squares (8×8) ready for classification. Each square is 64×64 pixels}{figure.3}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-C}2}Class Distribution}{3}{subsubsection.3.3.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Class Distribution in Training Set}}{3}{table.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-C}3}Data Splitting}{3}{subsubsection.3.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-D}}Classification Model}{3}{subsection.3.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-D}1}Architecture Selection}{3}{subsubsection.3.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-D}2}Training Strategy}{3}{subsubsection.3.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-E}}Out-of-Distribution Detection}{3}{subsection.3.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-E}1}Occlusion Problem}{3}{subsubsection.3.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-E}2}Confidence-Based OOD Detection}{3}{subsubsection.3.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-F}}Board Reconstruction}{4}{subsection.3.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Experiments}{4}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}Implementation Details}{4}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Preprocessing Results}{4}{subsection.4.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Board Detection Success Rates}}{4}{table.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}Classification Results}{4}{subsection.4.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Model Performance Comparison}}{4}{table.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-C}1}Model Comparison}{4}{table.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces Per-Class Metrics (ResNet18 Fine-tuned)}}{4}{table.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-C}2}Per-Class Performance}{4}{table.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-C}3}Training Dynamics}{4}{subsubsection.4.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-D}}OOD Detection Results}{4}{subsection.4.4}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces OOD Detection Performance ($\theta = 0.80$)}}{4}{table.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-D}1}Confidence Distribution Analysis}{4}{table.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-E}}Ablation Studies}{4}{subsection.4.5}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces Effect of Weighted Sampling}}{4}{table.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-E}1}Impact of Class Balancing}{5}{table.6}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {VII}{\ignorespaces Effect of Data Augmentation}}{5}{table.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-E}2}Impact of Data Augmentation}{5}{table.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-E}3}Impact of Padded Dataset}{5}{subsubsection.4.5.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {V}Error Analysis}{5}{section.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Common Failure Modes}{5}{subsection.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}Suggested Improvements}{5}{subsection.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Discussion}{5}{section.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}Key Achievements}{5}{subsection.6.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Limitations}{5}{subsection.6.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-C}}Comparison with Existing Systems}{5}{subsection.6.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-D}}Practical Applications}{5}{subsection.6.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Future Work}{5}{section.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-A}}Short-term Improvements}{5}{subsection.7.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-B}}Long-term Extensions}{5}{subsection.7.2}\protected@file@percent }
+\bibcite{roboflow}{1}
+\bibcite{hendrycks2017baseline}{2}
+\bibcite{liang2018enhancing}{3}
+\bibcite{lee2018simple}{4}
+\bibcite{he2016deep}{5}
+\bibcite{simonyan2015very}{6}
+\bibcite{deng2009imagenet}{7}
+\bibcite{opencv}{8}
+\bibcite{pytorch}{9}
+\bibcite{forsyth1883}{10}
+\@writefile{toc}{\contentsline {section}{\numberline {VIII}Conclusion}{6}{section.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{References}{6}{section*.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Random samples from each of the 13 classes showing the diversity and challenges in the dataset.}}{6}{figure.4}\protected@file@percent }
+\newlabel{fig:dataset_samples}{{4}{6}{Random samples from each of the 13 classes showing the diversity and challenges in the dataset}{figure.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Class distribution across training and validation sets showing natural chess game imbalance.}}{7}{figure.5}\protected@file@percent }
+\newlabel{fig:class_distribution}{{5}{7}{Class distribution across training and validation sets showing natural chess game imbalance}{figure.5}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Model confidence distribution and prediction accuracy across validation set. High confidence predictions strongly correlate with correct classifications.}}{7}{figure.6}\protected@file@percent }
+\newlabel{fig:model_confidence}{{6}{7}{Model confidence distribution and prediction accuracy across validation set. High confidence predictions strongly correlate with correct classifications}{figure.6}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Confidence score distributions for clean vs. occluded images. Clear separation validates MSP-based OOD detection approach.}}{7}{figure.7}\protected@file@percent }
+\newlabel{fig:ood_confidence}{{7}{7}{Confidence score distributions for clean vs. occluded images. Clear separation validates MSP-based OOD detection approach}{figure.7}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Comprehensive error analysis showing misclassified samples with their predicted labels, true labels, and confidence scores. Highlights common failure modes including piece cropping, similar piece confusion, and occlusions.}}{8}{figure.8}\protected@file@percent }
+\newlabel{fig:error_viz}{{8}{8}{Comprehensive error analysis showing misclassified samples with their predicted labels, true labels, and confidence scores. Highlights common failure modes including piece cropping, similar piece confusion, and occlusions}{figure.8}{}}
+\gdef \@abspage@last{8}
