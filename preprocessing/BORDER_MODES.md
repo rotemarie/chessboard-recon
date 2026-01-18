@@ -1,6 +1,11 @@
-# Border Handling for 3×3 Block Extraction
+# Border Handling for Dataset Creation
 
-When extracting 3×3 blocks for edge squares (e.g., squares on the a-file, h-file, 1st rank, or 8th rank), we need to pad the board to create context beyond the board edges.
+When creating padded or block-based datasets, we need to pad beyond the original board boundaries for edge squares. This document explains the different padding strategies.
+
+## Applies To
+
+- **Padded Dataset (`create_padded_dataset.py`)**: Single squares with 30% padding
+- **Block Dataset (`create_block_dataset.py`)**: 3×3 blocks of squares
 
 ## The Problem
 

@@ -28,13 +28,14 @@ class BlockSquareExtractor:
     Extracts 3×3 blocks centered on each square.
     """
     
-    def __init__(self, board_size: int = 512, border_mode: str = 'reflect'):
+    def __init__(self, board_size: int = 512, border_mode: str = 'constant', border_color: str = 'black'):
         """
         Initialize the block extractor.
         
         Args:
             board_size: Size of the warped board (must match BoardDetector)
             border_mode: How to handle edges - 'reflect', 'constant', or 'replicate'
+            border_color: Color for constant border - 'black', 'white', or 'gray'
         """
         self.board_size = board_size
         self.square_size = board_size // 8  # 64 pixels per square
@@ -47,13 +48,24 @@ class BlockSquareExtractor:
             'constant': cv2.BORDER_CONSTANT,    # Fill with constant color
             'replicate': cv2.BORDER_REPLICATE   # Replicate edge pixels (causes blur)
         }
-        self.border_mode = self.border_modes.get(border_mode, cv2.BORDER_REFLECT_101)
+        self.border_mode = self.border_modes.get(border_mode, cv2.BORDER_CONSTANT)
         self.border_mode_name = border_mode
+        
+        # Choose border color (BGR format)
+        self.border_colors = {
+            'black': [0, 0, 0],
+            'white': [255, 255, 255],
+            'gray': [128, 128, 128]
+        }
+        self.border_color = self.border_colors.get(border_color, [0, 0, 0])
+        self.border_color_name = border_color
         
         print(f"Square size: {self.square_size}×{self.square_size}")
         print(f"Block size: {self.block_size}×{self.block_size} squares")
         print(f"Output size: {self.output_size}×{self.output_size} pixels")
         print(f"Border handling: {border_mode}")
+        if border_mode == 'constant':
+            print(f"Border color: {border_color}")
     
     def extract_blocks(self, warped_board: np.ndarray) -> list:
         """
@@ -68,7 +80,7 @@ class BlockSquareExtractor:
         # Pad the board by 1 square on each side for edge handling
         # This allows us to extract 3×3 blocks for edge squares
         if self.border_mode == cv2.BORDER_CONSTANT:
-            # Use gray color for constant border (neutral background)
+            # Use specified color for constant border
             padded_board = cv2.copyMakeBorder(
                 warped_board,
                 self.square_size,  # top
@@ -76,7 +88,7 @@ class BlockSquareExtractor:
                 self.square_size,  # left
                 self.square_size,  # right
                 self.border_mode,
-                value=[128, 128, 128]  # Gray
+                value=self.border_color
             )
         else:
             # Use the specified border mode
@@ -168,7 +180,8 @@ class BlockSquareExtractor:
 def create_block_dataset(data_root: str, 
                         output_root: str,
                         board_size: int = 512,
-                        border_mode: str = 'reflect'):
+                        border_mode: str = 'constant',
+                        border_color: str = 'black'):
     """
     Create a block-based dataset where each square is extracted with 3×3 context.
     
@@ -176,7 +189,8 @@ def create_block_dataset(data_root: str,
         data_root: Root with per_frame data
         output_root: Where to save block dataset
         board_size: Board size for warping
-        border_mode: How to handle edges - 'reflect' (mirror), 'constant' (gray), or 'replicate' (blur)
+        border_mode: How to handle edges - 'reflect' (mirror), 'constant' (solid color), or 'replicate' (blur)
+        border_color: Color for constant border - 'black', 'white', or 'gray'
     """
     data_root = Path(data_root)
     output_root = Path(output_root)
@@ -187,11 +201,13 @@ def create_block_dataset(data_root: str,
     print(f"Input: {data_root}")
     print(f"Output: {output_root}")
     print(f"Border mode: {border_mode}")
+    if border_mode == 'constant':
+        print(f"Border color: {border_color}")
     print()
     
     # Initialize
     detector = BoardDetector(board_size=board_size)
-    extractor = BlockSquareExtractor(board_size=board_size, border_mode=border_mode)
+    extractor = BlockSquareExtractor(board_size=board_size, border_mode=border_mode, border_color=border_color)
     
     # Create output structure
     train_dir = output_root / 'train'
@@ -280,12 +296,13 @@ def create_block_dataset(data_root: str,
             print(f"  {class_dir.name:20s}: {count:6d} images")
 
 
-def test_blocks(border_mode: str = 'reflect'):
+def test_blocks(border_mode: str = 'constant', border_color: str = 'black'):
     """
     Test block extraction on a sample image.
     
     Args:
         border_mode: Border handling strategy to test
+        border_color: Color for constant border
     """
     from pathlib import Path
     
@@ -307,7 +324,7 @@ def test_blocks(border_mode: str = 'reflect'):
         return
     
     # Extract blocks with specified border mode
-    extractor = BlockSquareExtractor(board_size=512, border_mode=border_mode)
+    extractor = BlockSquareExtractor(board_size=512, border_mode=border_mode, border_color=border_color)
     
     # Visualize some interesting squares
     # e4 (center) = square 28
@@ -338,9 +355,13 @@ def main():
                        default='/Users/rotemar/Documents/BGU/Intro to Deep Learning/final project/chessboard-recon/preprocessed_data_blocks',
                        help='Output directory for block dataset')
     parser.add_argument('--border-mode', type=str, 
-                       default='reflect',
+                       default='constant',
                        choices=['reflect', 'constant', 'replicate'],
-                       help='Border handling: reflect (mirror), constant (gray), replicate (blur)')
+                       help='Border handling: reflect (mirror), constant (solid color), replicate (blur)')
+    parser.add_argument('--border-color', type=str,
+                       default='black',
+                       choices=['black', 'white', 'gray'],
+                       help='Color for constant border: black, white, or gray')
     parser.add_argument('--test', action='store_true',
                        help='Run test visualization instead of full processing')
     
@@ -348,12 +369,13 @@ def main():
     
     if args.test:
         print("Running test visualization...")
-        test_blocks(border_mode=args.border_mode)
+        test_blocks(border_mode=args.border_mode, border_color=args.border_color)
     else:
         create_block_dataset(
             data_root=args.data_root,
             output_root=args.output_root,
-            border_mode=args.border_mode
+            border_mode=args.border_mode,
+            border_color=args.border_color
         )
         
         print("\n✅ Block-based dataset created successfully!")

@@ -10,7 +10,8 @@ The padding helps capture:
 - Shadows and context from neighboring squares
 - Better features for angled pieces
 
-Output: preprocessed_data_padded/ with larger square images
+Default: 30% padding with solid black borders (no blur artifacts)
+Output: preprocessed_data_padded/ with larger square images (102×102 for 30%)
 """
 
 import cv2
@@ -28,14 +29,15 @@ class PaddedSquareExtractor:
     Extracts squares with padding around them.
     """
     
-    def __init__(self, board_size: int = 512, padding_percent: float = 0.15):
+    def __init__(self, board_size: int = 512, padding_percent: float = 0.30, border_color: str = 'black'):
         """
         Initialize the padded square extractor.
         
         Args:
             board_size: Size of the warped board (must match BoardDetector)
-            padding_percent: Percentage of padding to add (0.15 = 15% on each side)
-                           For 64x64 square, 15% padding = 74x74 output
+            padding_percent: Percentage of padding to add (0.30 = 30% on each side)
+                           For 64x64 square, 30% padding = 102x102 output
+            border_color: Color for padding - 'black', 'white', or 'gray'
         """
         self.board_size = board_size
         self.square_size = board_size // 8
@@ -43,9 +45,19 @@ class PaddedSquareExtractor:
         self.padding_pixels = int(self.square_size * padding_percent)
         self.output_size = self.square_size + 2 * self.padding_pixels
         
+        # Choose border color (BGR format)
+        self.border_colors = {
+            'black': [0, 0, 0],
+            'white': [255, 255, 255],
+            'gray': [128, 128, 128]
+        }
+        self.border_color = self.border_colors.get(border_color, [0, 0, 0])
+        self.border_color_name = border_color
+        
         print(f"Square size: {self.square_size}x{self.square_size}")
         print(f"Padding: {self.padding_pixels} pixels on each side")
         print(f"Output size: {self.output_size}x{self.output_size}")
+        print(f"Border color: {border_color}")
     
     def extract_squares_with_padding(self, warped_board: np.ndarray) -> list:
         """
@@ -58,14 +70,15 @@ class PaddedSquareExtractor:
             List of 64 padded square images
         """
         # Add padding to the entire board first
-        # This handles edge squares cleanly
+        # This handles edge squares cleanly with solid color padding
         padded_board = cv2.copyMakeBorder(
             warped_board,
             self.padding_pixels,  # top
             self.padding_pixels,  # bottom
             self.padding_pixels,  # left
             self.padding_pixels,  # right
-            cv2.BORDER_REPLICATE  # Replicate edge pixels
+            cv2.BORDER_CONSTANT,  # Fill with constant color
+            value=self.border_color
         )
         
         squares = []
@@ -139,16 +152,18 @@ class PaddedSquareExtractor:
 
 def create_padded_dataset(data_root: str, 
                          output_root: str,
-                         padding_percent: float = 0.15,
-                         board_size: int = 512):
+                         padding_percent: float = 0.30,
+                         board_size: int = 512,
+                         border_color: str = 'black'):
     """
     Create a padded version of the preprocessed dataset.
     
     Args:
         data_root: Root with per_frame data
         output_root: Where to save padded dataset
-        padding_percent: How much padding (0.15 = 15%)
+        padding_percent: How much padding (0.30 = 30%)
         board_size: Board size for warping
+        border_color: Color for padding - 'black', 'white', or 'gray'
     """
     data_root = Path(data_root)
     output_root = Path(output_root)
@@ -159,12 +174,14 @@ def create_padded_dataset(data_root: str,
     print(f"Input: {data_root}")
     print(f"Output: {output_root}")
     print(f"Padding: {padding_percent*100:.0f}%")
+    print(f"Border color: {border_color}")
     print()
     
     # Initialize
     detector = BoardDetector(board_size=board_size)
     extractor = PaddedSquareExtractor(board_size=board_size, 
-                                     padding_percent=padding_percent)
+                                     padding_percent=padding_percent,
+                                     border_color=border_color)
     
     # Create output structure
     train_dir = output_root / 'train'
@@ -277,9 +294,9 @@ def test_padding():
         return
     
     # Compare padding percentages
-    for padding in [0.10, 0.15, 0.20]:
+    for padding in [0.20, 0.25, 0.30]:
         print(f"\nPadding: {padding*100:.0f}%")
-        extractor = PaddedSquareExtractor(board_size=512, padding_percent=padding)
+        extractor = PaddedSquareExtractor(board_size=512, padding_percent=padding, border_color='black')
         
         # Show comparison for a piece square (e.g., white king at e1)
         # e1 = square 60
@@ -299,8 +316,11 @@ def main():
     parser.add_argument('--output-root', type=str,
                        default='/Users/rotemar/Documents/BGU/Intro to Deep Learning/final project/chessboard-recon/preprocessed_data_padded',
                        help='Output directory for padded dataset')
-    parser.add_argument('--padding', type=float, default=0.15,
-                       help='Padding percentage (0.15 = 15%)')
+    parser.add_argument('--padding', type=float, default=0.30,
+                       help='Padding percentage (0.30 = 30%)')
+    parser.add_argument('--border-color', type=str, default='black',
+                       choices=['black', 'white', 'gray'],
+                       help='Color for padding: black, white, or gray')
     parser.add_argument('--test', action='store_true',
                        help='Run test visualization instead of full processing')
     
@@ -313,7 +333,8 @@ def main():
         create_padded_dataset(
             data_root=args.data_root,
             output_root=args.output_root,
-            padding_percent=args.padding
+            padding_percent=args.padding,
+            border_color=args.border_color
         )
         
         print("\n✅ Padded dataset created successfully!")
