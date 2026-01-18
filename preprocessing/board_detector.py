@@ -10,7 +10,6 @@ This module handles:
 import cv2
 import numpy as np
 from typing import Tuple, Optional, List
-import matplotlib.pyplot as plt
 
 
 class BoardDetector:
@@ -83,6 +82,7 @@ class BoardDetector:
         edges = cv2.Canny(blurred, 50, 150)
         
         if debug:
+            import matplotlib.pyplot as plt
             plt.figure(figsize=(15, 5))
             plt.subplot(131)
             plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
@@ -145,6 +145,7 @@ class BoardDetector:
         morph = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=2)
         
         if debug:
+            import matplotlib.pyplot as plt
             plt.figure(figsize=(10, 5))
             plt.subplot(121)
             plt.imshow(thresh, cmap='gray')
@@ -252,6 +253,7 @@ class BoardDetector:
             cv2.line(img_with_corners, pt1, pt2, (0, 255, 0), 2)
         
         # Display results
+        import matplotlib.pyplot as plt
         plt.figure(figsize=(15, 5))
         plt.subplot(121)
         plt.imshow(cv2.cvtColor(img_with_corners, cv2.COLOR_BGR2RGB))

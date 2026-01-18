@@ -77,6 +77,10 @@ checkpoints/
 models/
 saved_models/
 
+# Exception: allow the trained model for deployment
+!model/resnet18_ft.pth
+!model/classes.txt
+
 # Training outputs
 runs/
 logs/
@@ -95,11 +99,14 @@ test_visualization.png
 *.png
 *.jpg
 *.jpeg
-# But keep any images in docs or examples
+# But keep any images in docs, examples, and output (for demo)
 !docs/**/*.png
 !docs/**/*.jpg
 !examples/**/*.png
 !examples/**/*.jpg
+!output/*.jpg
+!output/*.jpeg
+!output/*.png
 
 # Large archives
 *.zip
