@@ -31,7 +31,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from tqdm import tqdm
-from typing import Dict, List, Tuple
+from typing import Dict, List
 import shutil
 
 try:

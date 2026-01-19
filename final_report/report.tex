@@ -13,7 +13,7 @@
 
 \title{Chessboard Square Classification and Board-State Reconstruction from Real Images Using Deep Learning}
 
-\author{\IEEEauthorblockN{Sean Grinberg, David Paster, Rotem Arie}
+\author{\IEEEauthorblockN{Shon Grinberg, David Paster, Rotem Arie}
 \IEEEauthorblockA{\textit{Introduction to Deep Learning} \\
 \textit{Ben-Gurion University of the Negev}\\
 Beer-Sheva, Israel}}
@@ -40,7 +40,7 @@ Given a single image of a chessboard captured from an arbitrary angle, our syste
 \begin{enumerate}
     \item Detect and localize the chessboard within the image
     \item Extract all 64 individual squares
-    \item Classify each square into 13 classes: 12 piece types (white/black × pawn/knight/bishop/rook/queen/king) plus empty
+    \item Classify each square into 13 classes: 12 piece types (white/black pawn/knight/bishop/rook/queen/king) plus empty
     \item Detect and handle occluded or ambiguous squares
     \item Reconstruct the complete board state in FEN notation
 \end{enumerate}
@@ -60,7 +60,7 @@ Our main contributions are:
 
 \subsection{Chess Recognition Systems}
 
-Early chess recognition systems relied on controlled environments with specific lighting and camera setups \cite{roboflow}. Recent work has explored various approaches including:
+Recent chess recognition work leverages public datasets and benchmark repositories such as Roboflow \cite{roboflow}. Approaches include:
 
 \textbf{Traditional Computer Vision:} Template matching and feature-based methods have been used for piece recognition but struggle with variations in perspective and lighting.
 
@@ -91,6 +91,13 @@ Our system consists of three main components:
     \item \textbf{Classification Module:} CNN-based piece classification
     \item \textbf{Reconstruction Module:} FEN generation with OOD handling
 \end{enumerate}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\columnwidth]{pipeline_overview.png}
+\caption{End-to-end inference pipeline: board detection and warping, square extraction, classification, OOD filtering, and reconstruction into FEN and visualization.}
+\label{fig:pipeline_overview}
+\end{figure}
 
 \subsection{Preprocessing Pipeline}
 
@@ -135,7 +142,7 @@ where $P_{src}$ are detected corners and $P_{dst} = \{(0,0), (512,0), (512,512),
 \begin{figure}[h]
 \centering
 \includegraphics[width=0.48\textwidth]{demo_warped.jpg}
-\caption{Warped board after perspective transformation: Top-down view normalized to 512×512 pixels.}
+\caption{Warped board after perspective transformation: Top-down view normalized to 512x512 pixels.}
 \label{fig:demo_warped}
 \end{figure}
 
@@ -146,7 +153,7 @@ The warped board is divided into an $8 \times 8$ grid, yielding 64 squares of $6
 \begin{figure}[h]
 \centering
 \includegraphics[width=0.48\textwidth]{demo_squares.jpg}
-\caption{Grid of 64 extracted squares (8×8) ready for classification. Each square is 64×64 pixels.}
+\caption{Grid of 64 extracted squares (8x8) ready for classification. Each square is 64x64 pixels.}
 \label{fig:demo_squares}
 \end{figure}
 
@@ -243,12 +250,12 @@ This game-level splitting prevents the model from learning game-specific pattern
 
 We experimented with three CNN architectures:
 \begin{enumerate}
-    \item \textbf{ResNet18:} 11M parameters, good speed-accuracy tradeoff
-    \item \textbf{ResNet50:} 23M parameters, better feature extraction
-    \item \textbf{VGG16:} 138M parameters, deeper architecture
+    \item \textbf{ResNet18:} 11M parameters, good speed-accuracy tradeoff \cite{he2016deep}
+    \item \textbf{ResNet50:} 23M parameters, better feature extraction \cite{he2016deep}
+    \item \textbf{VGG16:} 138M parameters, deeper architecture \cite{simonyan2015very}
 \end{enumerate}
 
-All models use ImageNet pretrained weights, with the final fully-connected layer replaced to output 13 classes.
+All models use ImageNet pretrained weights \cite{deng2009imagenet}, with the final fully-connected layer replaced to output 13 classes.
 
 \subsubsection{Training Strategy}
 
@@ -320,11 +327,14 @@ We select $\theta = 0.80$ (5th percentile of clean distribution), balancing fals
     \item Classify each square with confidence
     \item Apply OOD threshold: low-confidence $\rightarrow$ '?'
     \item Generate FEN string with unknowns
+    \item Render board visualization from FEN and mark unknown squares with X
 \end{enumerate}
 
 \textbf{FEN with Unknowns:}
-Standard FEN is extended to support '?' for occluded squares, e.g.:
+Standard Forsyth-Edwards Notation (FEN) \cite{forsyth1883} is extended to support '?' for occluded squares, e.g.:
 \texttt{rnbqkbnr/pppppp?p/8/8/8/8/PPPPPPPP/RNBQKBNR}
+We note that '?' is not part of standard FEN; it is used only as an internal marker for unknown squares and in visualizations.
+The chessboard visualization is rendered by parsing this FEN (treating '?' as empty) and overlaying X marks at unknown positions.
 
 \section{Experiments}
 
@@ -332,8 +342,8 @@ Standard FEN is extended to support '?' for occluded squares, e.g.:
 
 \textbf{Software Stack:}
 \begin{itemize}
-    \item Framework: PyTorch 2.0+
-    \item Computer Vision: OpenCV 4.8+
+    \item Framework: PyTorch 2.0+ \cite{pytorch}
+    \item Computer Vision: OpenCV 4.8+ \cite{opencv}
     \item Data: NumPy, Pandas
     \item Experiment Tracking: Comet.ml
 \end{itemize}
@@ -347,6 +357,17 @@ Training performed on Google Colab with NVIDIA T4 GPU (16GB VRAM).
     \item ResNet50 fine-tuning: 4-5 hours
     \item VGG16 transfer: 3-4 hours
 \end{itemize}
+
+\textbf{Reproducibility:}
+We report the exact train/val/test split by game, hyperparameters, and model variants used in our experiments.
+The preprocessing and training code are provided in the accompanying repository to enable full reproduction of results.
+
+\subsection{Evaluation Protocol}
+
+We evaluate performance at both the square level and the board level to reflect end-to-end system quality.
+\textbf{Square-level metrics} include overall accuracy and macro-averaged F1 score across the 13 classes.
+\textbf{Board-level metrics} include: (1) exact FEN match rate (all 64 squares correct), (2) average correct squares per board, and (3) piece-only accuracy (excluding empty squares).
+For OOD detection, we report AUROC and FPR@95 TPR, and track the unknown rate on clean validation samples to quantify false rejections.
 
 \subsection{Preprocessing Results}
 
@@ -581,6 +602,7 @@ Board patterns or shadows misclassified as pieces.
     \item \textbf{No temporal context:} Single-frame approach misses continuity
     \item \textbf{Preprocessing dependency:} Classification requires successful board detection
     \item \textbf{Piece cropping:} Fixed square boundaries cut off angled pieces
+    \item \textbf{Domain shift:} Performance can degrade on low-resolution images or boards with different textures and lighting
 \end{itemize}
 
 \subsection{Comparison with Existing Systems}
@@ -626,7 +648,7 @@ Our explicit OOD handling distinguishes this work from most existing systems tha
 
 \section{Conclusion}
 
-This work presents a complete system for chess piece classification and board-state reconstruction from real-world images. Our two-stage pipeline—robust preprocessing followed by deep learning classification—achieves 89\% accuracy on challenging data with arbitrary camera angles and lighting conditions.
+This work presents a complete system for chess piece classification and board-state reconstruction from real-world images. Our two-stage pipeline -- robust preprocessing followed by deep learning classification -- achieves 89\% accuracy on challenging data with arbitrary camera angles and lighting conditions.
 
 Key innovations include game-level data splitting to prevent leakage, weighted sampling for class balance, and confidence-based OOD detection for handling occlusions. The modular architecture enables easy integration into existing applications.
 

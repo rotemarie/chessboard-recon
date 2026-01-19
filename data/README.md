@@ -128,7 +128,4 @@ If you need to update the shared data:
 [ADD LICENSE INFORMATION IF APPLICABLE]
 [ADD CITATION IF FROM EXTERNAL SOURCE]
 
----
-
-**Need help?** Contact [YOUR EMAIL/SLACK/DISCORD]
 

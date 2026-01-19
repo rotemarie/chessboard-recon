@@ -3,7 +3,7 @@
 **Classify chess pieces from real board images and reconstruct the board state in FEN notation.**
 
 *Deep Learning Project - Ben-Gurion University 2026*  
-*Authors: Sean Grinberg • David Paster • Rotem Arie*
+*Authors: Shonn Grinberg • David Paster • Rotem Arie*
 
 ---
 
@@ -79,6 +79,47 @@ streamlit run app.py
 ```
 
 Opens interactive web app at `http://localhost:8501` for testing predictions!
+
+---
+
+## Usage
+
+### Command Line Inference
+
+```bash
+python -m inference.pipeline --image image3.jpg --class-dir dataset/train --output-dir outputs --save-crops --save-grid --save-clean-board
+```
+
+**What you get in `outputs/`:**
+- `fen.txt` - FEN string (uses `?` for unknown squares)
+- `board.svg` - board visualization rendered from the FEN (open in a browser)
+- `predictions.json` - per-square labels and confidences
+- `warped_board.jpg` - top-down warped board
+- `crops/` - 64 square crops (optional)
+- `crops_grid.jpg` - 8x8 grid of crops (optional)
+- `fen.svg` - clean board visualization (no X markers, optional)
+- `fen_clean.txt` - standard FEN with unknowns treated as empty (optional)
+
+### Flags
+
+- `--image` Path to the input image (required).
+- `--model` Path to the model checkpoint (default: `model/resnet18_ft.pth`).
+- `--class-dir` Directory with class subfolders (ImageFolder order).
+- `--classes-file` Text file with class names, one per line (default: `model/classes.txt`).
+- `--output-dir` Output directory for artifacts (default: `outputs`).
+- `--threshold` Confidence threshold for OOD (default: `0.8`).
+- `--board-size` Size of the warped board in pixels (default: `512`).
+- `--render-size` Size of the rendered board SVG (default: `512`).
+- `--save-crops` Save per-square crops to disk.
+- `--crops-dir` Custom directory for crops (default: `outputs/crops`).
+- `--save-grid` Save an 8x8 grid of crops as `outputs/crops_grid.jpg`.
+- `--save-clean-board` Save `fen.svg` and `fen_clean.txt` without X markers.
+- `--print-squares` Print square indices, positions, and shapes.
+
+**Notes:**
+- If the model file is not at `model/resnet18_ft.pth`, pass `--model` explicitly.
+- Class order must match training: `model/classes.txt` is preferred; if using `--class-dir`, folder names are sorted.
+- Use `--save-clean-board` if you want a standard FEN string with empty squares (no `?`).
 
 ---
 

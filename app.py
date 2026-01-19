@@ -218,7 +218,6 @@ def run_inference_pipeline(image_path, model_path=None, threshold=0.80):
         unknown_indices = []
         
         if predictions_path.exists():
-            import json
             predictions = json.loads(predictions_path.read_text(encoding="utf-8"))
             labels = [p["label"] for p in predictions]
             confidences = [p["confidence"] for p in predictions]
@@ -815,8 +814,8 @@ Training time: ~2-3 hours (GPU)
                 - **Purpose:** Detect occluded/uncertain squares
                 - **Result:** 85.4% true positive rate on occluded squares
                 
-                **Output:** This visualization shows the classified board with pieces placed 
-                based on model predictions. Unknown/occluded squares are marked with red X.
+                **Output:** The visualization is rendered from the FEN string derived from 
+                model predictions. Unknown/occluded squares are marked with red X.
                 """
             },
             {

@@ -4,7 +4,7 @@ Inference pipeline for chessboard reconstruction:
 2) Extract 64 square crops
 3) Classify each crop with a trained model
 4) Convert predictions to FEN
-5) Render chess.com-style board with unknown squares marked
+5) Render chess.com-style board from FEN with unknown squares marked
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import argparse
 import json
 import re
 from pathlib import Path
-from typing import Iterable, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -118,6 +118,13 @@ def labels_to_fen_with_unknown(labels: List[str]) -> str:
     return "/".join(fen_ranks)
 
 
+def labels_to_fen(labels: List[str], include_unknowns: bool) -> str:
+    if include_unknowns:
+        return labels_to_fen_with_unknown(labels)
+    normalized = ["empty" if label == "unknown" else label for label in labels]
+    return labels_to_fen_with_unknown(normalized)
+
+
 def _idx_to_square(idx: int) -> chess.Square:
     row = idx // 8
     col = idx % 8
@@ -165,25 +172,77 @@ def _extract_svg_square_geometry(
     return origin_x, origin_y, square_size
 
 
+def _normalize_fen_rank(rank: str) -> str:
+    normalized = []
+    empty = 0
+    for char in rank:
+        if char.isdigit():
+            empty += int(char)
+        elif char == "?":
+            empty += 1
+        else:
+            if empty:
+                normalized.append(str(empty))
+                empty = 0
+            normalized.append(char)
+    if empty:
+        normalized.append(str(empty))
+    return "".join(normalized)
+
+
+def _board_fen_from_string(fen: str) -> str:
+    board_fen = fen.split()[0]
+    ranks = board_fen.split("/")
+    if len(ranks) != 8:
+        raise ValueError(f"Invalid FEN: expected 8 ranks, got {len(ranks)}")
+    normalized_ranks = [_normalize_fen_rank(rank) for rank in ranks]
+    for idx, rank in enumerate(normalized_ranks):
+        total = 0
+        for char in rank:
+            total += int(char) if char.isdigit() else 1
+        if total != 8:
+            raise ValueError(f"Invalid FEN rank length at {idx}: {rank}")
+    return "/".join(normalized_ranks)
+
+
+def _unknown_indices_from_fen(fen: str) -> List[int]:
+    board_fen = fen.split()[0]
+    ranks = board_fen.split("/")
+    if len(ranks) != 8:
+        raise ValueError(f"Invalid FEN: expected 8 ranks, got {len(ranks)}")
+
+    unknown_indices: List[int] = []
+    idx = 0
+    for rank in ranks:
+        for char in rank:
+            if char.isdigit():
+                idx += int(char)
+            else:
+                if char == "?":
+                    unknown_indices.append(idx)
+                idx += 1
+
+    if idx != 64:
+        raise ValueError(f"Invalid FEN: expected 64 squares, got {idx}")
+
+    return unknown_indices
+
+
 def render_board_svg(
-    labels: List[str],
-    unknown_indices: List[int],
+    fen: str,
     size: int = 512,
     orientation: chess.Color = chess.WHITE,
+    show_unknowns: bool = True,
 ) -> str:
     board = chess.Board(None)
-    reverse_map = {v: k for k, v in FENParser.PIECE_MAP.items()}
-
-    for idx, label in enumerate(labels):
-        if label in {"empty", "unknown"}:
-            continue
-        symbol = reverse_map.get(label)
-        if symbol is None:
-            continue
-        board.set_piece_at(_idx_to_square(idx), chess.Piece.from_symbol(symbol))
+    board.set_board_fen(_board_fen_from_string(fen))
 
     svg = chess.svg.board(board=board, size=size, orientation=orientation, colors=CHESS_COM_COLORS)
 
+    if not show_unknowns:
+        return svg
+
+    unknown_indices = _unknown_indices_from_fen(fen)
     if not unknown_indices:
         return svg
 
@@ -269,6 +328,7 @@ def save_crops(
     squares: List[np.ndarray],
     labels: List[str],
     output_dir: Path,
+    mark_unknowns: bool = True,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     extractor = SquareExtractor(board_size=512)
@@ -277,7 +337,10 @@ def save_crops(
         pos = extractor.get_square_position(idx)
         label = labels[idx]
         filename = f"{idx:02d}_{pos}_{label}.jpg"
-        image = square if label != "unknown" else draw_unknown_x(square)
+        if label == "unknown" and mark_unknowns:
+            image = draw_unknown_x(square)
+        else:
+            image = square
         cv2.imwrite(str(output_dir / filename), image)
 
 
@@ -285,6 +348,7 @@ def save_crops_grid(
     squares: List[np.ndarray],
     labels: List[str],
     output_path: Path,
+    mark_unknowns: bool = True,
 ) -> None:
     if not squares:
         return
@@ -293,7 +357,10 @@ def save_crops_grid(
     for idx, square in enumerate(squares):
         row = idx // 8
         col = idx % 8
-        tile = square if labels[idx] != "unknown" else draw_unknown_x(square)
+        if labels[idx] == "unknown" and mark_unknowns:
+            tile = draw_unknown_x(square)
+        else:
+            tile = square
         y1 = row * square_h
         y2 = y1 + square_h
         x1 = col * square_w
@@ -315,6 +382,8 @@ def run_pipeline(
     print_squares: bool,
     crops_dir: Optional[str],
     save_grid: bool,
+    include_unknowns: bool = True,
+    save_clean_board: bool = False,
 ) -> None:
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -354,18 +423,39 @@ def run_pipeline(
         threshold=threshold,
     )
 
-    fen = labels_to_fen_with_unknown(labels)
+    fen = labels_to_fen(labels, include_unknowns)
     (output_path / "fen.txt").write_text(fen, encoding="utf-8")
 
-    svg = render_board_svg(labels, unknown_indices, size=render_size, orientation=chess.WHITE)
+    svg = render_board_svg(
+        fen,
+        size=render_size,
+        orientation=chess.WHITE,
+        show_unknowns=include_unknowns,
+    )
     (output_path / "board.svg").write_text(svg, encoding="utf-8")
+
+    if save_clean_board:
+        clean_fen = labels_to_fen(labels, include_unknowns=False)
+        (output_path / "fen_clean.txt").write_text(clean_fen, encoding="utf-8")
+        clean_svg = render_board_svg(
+            clean_fen,
+            size=render_size,
+            orientation=chess.WHITE,
+            show_unknowns=False,
+        )
+        (output_path / "fen.svg").write_text(clean_svg, encoding="utf-8")
 
     if save_square_crops:
         target_dir = Path(crops_dir) if crops_dir else output_path / "crops"
-        save_crops(squares, labels, target_dir)
+        save_crops(squares, labels, target_dir, mark_unknowns=include_unknowns)
 
     if save_grid:
-        save_crops_grid(squares, labels, output_path / "crops_grid.jpg")
+        save_crops_grid(
+            squares,
+            labels,
+            output_path / "crops_grid.jpg",
+            mark_unknowns=include_unknowns,
+        )
 
     preds = []
     for idx, (label, conf) in enumerate(zip(labels, confs)):
@@ -424,6 +514,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Save an 8x8 grid image of crops as outputs/crops_grid.jpg.",
     )
+    parser.add_argument(
+        "--save-clean-board",
+        action="store_true",
+        help="Save a clean board SVG (no X markers) and standard FEN.",
+    )
     return parser.parse_args()
 
 
@@ -442,6 +537,7 @@ def main() -> None:
         print_squares=args.print_squares,
         crops_dir=args.crops_dir,
         save_grid=args.save_grid,
+        save_clean_board=args.save_clean_board,
     )
 
 

@@ -9,7 +9,7 @@ This module handles:
 
 import cv2
 import numpy as np
-from typing import Tuple, Optional, List
+from typing import Optional
 
 
 class BoardDetector:
@@ -264,35 +264,4 @@ class BoardDetector:
         plt.show()
 
 
-def test_detector():
-    """
-    Test the board detector on a sample image.
-    """
-    import os
-    
-    # Path to a sample image
-    sample_image_path = "/Users/rotemar/Documents/BGU/Intro to Deep Learning/final project/chessboard-recon/data/per_frame/game2_per_frame/tagged_images/frame_000200.jpg"
-    
-    if not os.path.exists(sample_image_path):
-        print(f"Sample image not found: {sample_image_path}")
-        return
-    
-    # Load image
-    image = cv2.imread(sample_image_path)
-    print(f"Loaded image with shape: {image.shape}")
-    
-    # Create detector
-    detector = BoardDetector(board_size=512)
-    
-    # Detect and warp board
-    warped = detector.detect_board(image, debug=True)
-    
-    if warped is not None:
-        print(f"Successfully warped board to shape: {warped.shape}")
-    else:
-        print("Board detection failed")
-
-
-if __name__ == "__main__":
-    test_detector()
 
