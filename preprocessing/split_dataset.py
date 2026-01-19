@@ -313,18 +313,34 @@ def main():
     """
     Main entry point for dataset splitting.
     """
-    # Paths
-    preprocessed_root = "/Users/rotemar/Documents/BGU/Intro to Deep Learning/final project/chessboard-recon/preprocessed_data"
-    output_root = "/Users/rotemar/Documents/BGU/Intro to Deep Learning/final project/chessboard-recon/dataset"
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Split dataset by game')
+    parser.add_argument('--preprocessed-root', type=str,
+                       default='/Users/rotemar/Documents/BGU/Intro to Deep Learning/final project/chessboard-recon/preprocessed_data',
+                       help='Root directory with preprocessed_data/train/')
+    parser.add_argument('--output-root', type=str,
+                       default='/Users/rotemar/Documents/BGU/Intro to Deep Learning/final project/chessboard-recon/dataset',
+                       help='Output directory for split dataset')
+    parser.add_argument('--val-ratio', type=float, default=0.15,
+                       help='Validation set ratio (default: 0.15)')
+    parser.add_argument('--test-ratio', type=float, default=0.15,
+                       help='Test set ratio (default: 0.15)')
+    parser.add_argument('--seed', type=int, default=42,
+                       help='Random seed (default: 42)')
+    parser.add_argument('--symlink', action='store_true',
+                       help='Use symlinks instead of copying files')
+    
+    args = parser.parse_args()
     
     # Create splitter
     splitter = DatasetSplitter(
-        preprocessed_root=preprocessed_root,
-        output_root=output_root,
-        val_ratio=0.15,
-        test_ratio=0.15,
-        seed=42,
-        copy_files=True  # Set to False for symlinks (faster, but requires source files)
+        preprocessed_root=args.preprocessed_root,
+        output_root=args.output_root,
+        val_ratio=args.val_ratio,
+        test_ratio=args.test_ratio,
+        seed=args.seed,
+        copy_files=not args.symlink
     )
     
     # Split dataset
