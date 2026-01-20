@@ -95,29 +95,29 @@ python -m inference.pipeline --image image3.jpg --class-dir dataset/train --outp
 - `board.svg` - board visualization rendered from the FEN (open in a browser)
 - `predictions.json` - per-square labels and confidences
 - `warped_board.jpg` - top-down warped board
-- `crops/` - 64 square crops (optional)
-- `crops_grid.jpg` - 8x8 grid of crops (optional)
+- `crops/` - 64 block crops (optional)
+- `crops_grid.jpg` - separated 8x8 grid of block crops (optional)
 - `fen.svg` - clean board visualization (no X markers, optional)
 - `fen_clean.txt` - standard FEN with unknowns treated as empty (optional)
 
 ### Flags
 
 - `--image` Path to the input image (required).
-- `--model` Path to the model checkpoint (default: `model/resnet18_ft.pth`).
+- `--model` Path to the model checkpoint (default: `model/resnet18_ft_blocks_black.pth`).
 - `--class-dir` Directory with class subfolders (ImageFolder order).
 - `--classes-file` Text file with class names, one per line (default: `model/classes.txt`).
 - `--output-dir` Output directory for artifacts (default: `outputs`).
-- `--threshold` Confidence threshold for OOD (default: `0.8`).
+- `--threshold` Confidence threshold for OOD (default: `0.5`).
 - `--board-size` Size of the warped board in pixels (default: `512`).
 - `--render-size` Size of the rendered board SVG (default: `512`).
-- `--save-crops` Save per-square crops to disk.
+- `--save-crops` Save per-square crops (block context) to disk.
 - `--crops-dir` Custom directory for crops (default: `outputs/crops`).
-- `--save-grid` Save an 8x8 grid of crops as `outputs/crops_grid.jpg`.
+- `--save-grid` Save a separated 8x8 grid of block crops as `outputs/crops_grid.jpg`.
 - `--save-clean-board` Save `fen.svg` and `fen_clean.txt` without X markers.
 - `--print-squares` Print square indices, positions, and shapes.
 
 **Notes:**
-- If the model file is not at `model/resnet18_ft.pth`, pass `--model` explicitly.
+- If the model file is not at `model/resnet18_ft_blocks_black.pth`, pass `--model` explicitly.
 - Class order must match training: `model/classes.txt` is preferred; if using `--class-dir`, folder names are sorted.
 - Use `--save-clean-board` if you want a standard FEN string with empty squares (no `?`).
 
@@ -136,18 +136,18 @@ Finds the chessboard in the image using edge detection and applies perspective t
 - Perspective transform to 512×512 top-down view
 - Fallback method for difficult lighting
 
-### **Step 2: Square Extraction**
+### **Step 2: Block Extraction**
 
-Divides the warped board into 64 individual 64×64 pixel squares.
+Extracts 64 block crops (3x3 context, 192x192) centered on each target square.
 
 ```
-512×512 board → 8×8 grid → 64 squares (64×64 each)
+512x512 board -> 8x8 grid -> 64 blocks (3x3 squares each)
 Ordering: a8, b8, ..., h8, a7, ..., h1 (matches FEN)
 ```
 
 ### **Step 3: Classification**
 
-Fine-tuned ResNet18 classifies each square into 13 classes:
+Fine-tuned ResNet18 classifies each block crop (center square) into 13 classes:
 
 **13 Classes:**
 - 1× `empty`
@@ -160,7 +160,7 @@ Fine-tuned ResNet18 classifies each square into 13 classes:
 - **Architecture:** ResNet18 (11M parameters)
 - **Training:** Fine-tuned all layers with weighted sampling
 - **Accuracy:** 89.08% on validation set
-- **OOD Detection:** Confidence thresholding (<0.8 → "unknown")
+- **OOD Detection:** Confidence thresholding (<0.5 → "unknown")
 
 ### **Step 4: FEN Reconstruction**
 
@@ -205,7 +205,7 @@ rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR
 **OOD Detection:**
 - True Positive Rate (occluded detected): 85.4%
 - False Positive Rate (clean rejected): 4.8%
-- Method: Confidence thresholding (threshold = 0.80)
+- Method: Confidence thresholding (threshold = 0.50)
 
 ---
 
@@ -232,7 +232,7 @@ chessboard-recon/
 │   └── test/
 ├── checkpoints/               # Saved models
 ├── model/                     # Deployed model for Streamlit
-│   ├── resnet18_ft.pth       # Best model weights
+│   ├── resnet18_ft_blocks_black.pth  # Best model weights (block model)
 │   └── classes.txt           # Class names
 ├── plots/                     # Training visualization plots
 ├── output/                    # Demo images
@@ -286,7 +286,7 @@ chessboard-recon/
 **Solution:** Maximum Softmax Probability (MSP)
 ```python
 confidence = max(softmax(logits))
-if confidence < 0.80:
+if confidence < 0.50:
     prediction = "unknown"
 ```
 
@@ -320,7 +320,7 @@ The app is deployed on Streamlit Cloud: [Link to deployment]
 - `app.py` - Main Streamlit app
 - `requirements.txt` - Python dependencies
 - `packages.txt` - System packages (OpenCV dependencies)
-- `model/resnet18_ft.pth` - Trained model weights
+- `model/resnet18_ft_blocks_black.pth` - Trained model weights (block model)
 - `model/classes.txt` - Class names
 
 ---

@@ -146,7 +146,7 @@ def load_sample_images():
     return []
 
 
-def run_inference_pipeline(image_path, model_path=None, threshold=0.80):
+def run_inference_pipeline(image_path, model_path=None, threshold=0.50):
     """
     Run the complete inference pipeline on an image using pipeline.py.
     
@@ -1319,7 +1319,7 @@ Training time: ~2-3 hours (GPU)
                 2. Take maximum probability as confidence score
                 3. If confidence < threshold → mark as "unknown"
                 
-                **Threshold selection:** 0.80
+                **Threshold selection:** 0.50
                 - Based on clean vs occluded distribution analysis
                 - 5th percentile of clean confidence
                 """)
@@ -1424,7 +1424,7 @@ python inference/pipeline.py \\
     --image path/to/board.jpg \\
     --model model/resnet18_ft_blocks_black.pth \\
     --classes-file model/classes.txt \\
-    --threshold 0.80 \\
+    --threshold 0.50 \\
     --output-dir outputs/ \\
     --save-grid
                 """, language="bash")
@@ -1438,7 +1438,7 @@ run_pipeline(
     image_path="board.jpg",
     model_path="model/resnet18_ft_blocks_black.pth",
     classes_file="model/classes.txt",
-    threshold=0.80,
+    threshold=0.50,
     save_grid=True
 )
                 """, language="python")
@@ -1545,7 +1545,7 @@ run_pipeline(
                 
                 **OOD Detection (Out-of-Distribution):**
                 - **Method:** Maximum Softmax Probability (MSP)
-                - **Threshold:** 0.80 (confidence below → "unknown")
+                - **Threshold:** 0.50 (confidence below → "unknown")
                 - **Purpose:** Detect occluded/uncertain squares
                 - **Result:** 85.4% true positive rate on occluded squares
                 
@@ -1723,7 +1723,7 @@ run_pipeline(
                 "Confidence Threshold",
                 min_value=0.5,
                 max_value=1.0,
-                value=0.80,
+                value=0.50,
                 step=0.05
             )
         
@@ -1923,7 +1923,7 @@ run_pipeline(
                     "Confidence Threshold (OOD)",
                     min_value=0.5,
                     max_value=1.0,
-                    value=0.80,
+                    value=0.50,
                     step=0.05,
                     help="Predictions below this are marked as 'unknown'",
                     key="live_demo_threshold"
@@ -2039,7 +2039,7 @@ run_pipeline(
                 if st.session_state.confidences:
                     import pandas as pd
                     
-                    threshold = confidence_threshold if 'confidence_threshold' in locals() else 0.80
+                    threshold = confidence_threshold if 'confidence_threshold' in locals() else 0.50
                     low_conf_indices = [i for i, c in enumerate(st.session_state.confidences) if c < threshold]
                     
                     if low_conf_indices:

@@ -1,7 +1,7 @@
 """
 Inference pipeline for chessboard reconstruction:
 1) Detect board and warp to top-down view
-2) Extract 64 square crops
+2) Extract 64 block crops (3x3 context)
 3) Classify each crop with a trained model
 4) Convert predictions to FEN
 5) Render chess.com-style board from FEN with unknown squares marked
@@ -29,9 +29,11 @@ import chess.svg
 try:
     from preprocessing.board_detector import BoardDetector
     from preprocessing.square_extractor import SquareExtractor, FENParser
+    from preprocessing.create_block_dataset import BlockSquareExtractor
 except ImportError:
     from ..preprocessing.board_detector import BoardDetector
     from ..preprocessing.square_extractor import SquareExtractor, FENParser
+    from ..preprocessing.create_block_dataset import BlockSquareExtractor
 
 
 CHESS_COM_COLORS = {
@@ -349,23 +351,27 @@ def save_crops_grid(
     labels: List[str],
     output_path: Path,
     mark_unknowns: bool = True,
+    padding: Optional[int] = None,
 ) -> None:
     if not squares:
         return
-    square_h, square_w = squares[0].shape[:2]
-    grid = np.zeros((square_h * 8, square_w * 8, 3), dtype=np.uint8)
+    tile_h, tile_w = squares[0].shape[:2]
+    pad = padding if padding is not None else max(4, tile_w // 32)
+    grid_h = 8 * tile_h + 9 * pad
+    grid_w = 8 * tile_w + 9 * pad
+    grid = np.full((grid_h, grid_w, 3), 20, dtype=np.uint8)
+
     for idx, square in enumerate(squares):
         row = idx // 8
         col = idx % 8
+        y1 = pad + row * (tile_h + pad)
+        x1 = pad + col * (tile_w + pad)
         if labels[idx] == "unknown" and mark_unknowns:
             tile = draw_unknown_x(square)
         else:
             tile = square
-        y1 = row * square_h
-        y2 = y1 + square_h
-        x1 = col * square_w
-        x2 = x1 + square_w
-        grid[y1:y2, x1:x2] = tile
+        grid[y1 : y1 + tile_h, x1 : x1 + tile_w] = tile
+
     cv2.imwrite(str(output_path), grid)
 
 
@@ -393,7 +399,13 @@ def run_pipeline(
         raise FileNotFoundError(f"Failed to load image: {image_path}")
 
     detector = BoardDetector(board_size=board_size)
-    extractor = SquareExtractor(board_size=board_size)
+    pos_extractor = SquareExtractor(board_size=board_size)
+    block_extractor = BlockSquareExtractor(
+        board_size=board_size,
+        border_mode="constant",
+        border_color="black",
+        verbose=False,
+    )
 
     warped = detector.detect_board(image, debug=False)
     if warped is None:
@@ -401,11 +413,11 @@ def run_pipeline(
 
     cv2.imwrite(str(output_path / "warped_board.jpg"), warped)
 
-    squares = extractor.extract_squares(warped)
+    squares = block_extractor.extract_blocks(warped)
     if print_squares:
-        print("Squares (index, position, shape):")
+        print("Blocks (index, position, shape):")
         for idx, square in enumerate(squares):
-            pos = extractor.get_square_position(idx)
+            pos = pos_extractor.get_square_position(idx)
             print(f"{idx:02d} {pos} {square.shape}")
 
     class_names = load_class_names(class_dir, classes_file)
@@ -462,7 +474,7 @@ def run_pipeline(
         preds.append(
             {
                 "index": idx,
-                "square": extractor.get_square_position(idx),
+                "square": pos_extractor.get_square_position(idx),
                 "label": label,
                 "confidence": float(conf),
             }
@@ -495,14 +507,18 @@ def parse_args() -> argparse.Namespace:
         default=str(Path("model") / "classes.txt"),
         help="Text file with class names, one per line.",
     )
-    parser.add_argument("--threshold", type=float, default=0.8, help="Confidence threshold.")
+    parser.add_argument("--threshold", type=float, default=0.5, help="Confidence threshold.")
     parser.add_argument("--board-size", type=int, default=512, help="Warped board size.")
     parser.add_argument("--render-size", type=int, default=512, help="Output render size.")
-    parser.add_argument("--save-crops", action="store_true", help="Save per-square crops.")
+    parser.add_argument(
+        "--save-crops",
+        action="store_true",
+        help="Save per-square crops (block context).",
+    )
     parser.add_argument(
         "--print-squares",
         action="store_true",
-        help="Print index/position/shape for each square crop.",
+        help="Print index/position/shape for each block crop.",
     )
     parser.add_argument(
         "--crops-dir",
@@ -512,7 +528,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--save-grid",
         action="store_true",
-        help="Save an 8x8 grid image of crops as outputs/crops_grid.jpg.",
+        help="Save a separated 8x8 grid of block crops as outputs/crops_grid.jpg.",
     )
     parser.add_argument(
         "--save-clean-board",
