@@ -818,7 +818,7 @@ def main():
                 if error_examples_path.exists():
                     st.image(str(error_examples_path), 
                              caption="Error Examples: Pieces Cut Off at Top",
-                             width='stretch')
+                             width=400)
                 else:
                     st.error("Image not found: error examples.png")
                 
@@ -979,7 +979,7 @@ def main():
                 if confusing_pieces_path.exists():
                     st.image(str(confusing_pieces_path), 
                              caption="Comparison: White vs Black Pieces - Shading Visibility",
-                             width='stretch')
+                             width=500)
                 else:
                     st.error("Image not found: confusing_pieces.png")
             
@@ -1022,7 +1022,7 @@ def main():
                 if black_shading_path.exists():
                     st.image(str(black_shading_path), 
                              caption="Before/After: Contrast Enhancement on Black Pieces",
-                             width='stretch')
+                             width=400)
                 else:
                     st.error("Image not found: black_shading.png")
             
@@ -1032,7 +1032,7 @@ def main():
                 if white_shading_path.exists():
                     st.image(str(white_shading_path), 
                              caption="Before/After: Contrast Enhancement on White Pieces",
-                             width='stretch')
+                             width=400)
                 else:
                     st.error("Image not found: white_shading.png")
             
@@ -1534,227 +1534,111 @@ run_pipeline(
                     unsafe_allow_html=True)
         
         st.markdown("""
-        This interactive demo walks through the complete process from input image to final FEN output.
-        Use the controls below to navigate through each stage.
+        Click on each step below to see the pipeline in action.
         """)
         
-        # Initialize step state
-        if 'demo_step' not in st.session_state:
-            st.session_state.demo_step = 0
+        full_demo_dir = Path(__file__).parent / "full_demo"
         
-        # Define pipeline steps
-        steps = [
-            {
-                "name": "Input",
-                "file": "og.jpeg",
-                "title": "Step 1: Input Image",
-                "description": """
-                **Input:** Raw photo of a physical chessboard taken from an arbitrary angle.
+        # Step 1: Input
+        with st.expander("**📥 Step 1: Input Image**", expanded=True):
+            col1, col2 = st.columns([1, 1])
+            
+            with col1:
+                og_path = full_demo_dir / "og.jpeg"
+                if og_path.exists():
+                    st.image(str(og_path), caption="Original Image", width=400)
+                else:
+                    st.error("Image not found: og.jpeg")
+            
+            with col2:
+                st.markdown("""
+                **Input:** Raw photo of a physical chessboard.
                 
                 **Challenges:**
                 - Perspective distortion
-                - Varying lighting conditions
+                - Varying lighting
                 - Background clutter
                 - Different camera angles
-                - Pieces at various heights
-                
-                **Goal:** Transform this raw image into a format suitable for piece classification.
-                """
-            },
-            {
-                "name": "Preprocessing",
-                "file": "preprocessing.jpeg",
-                "title": "Step 2: Preprocessing Pipeline",
-                "description": """
-                **Board Localization & Warping:**
-                1. **Edge Detection:** Canny edge detector finds board boundaries
-                2. **Contour Detection:** Identify quadrilateral shapes
-                3. **Corner Detection:** Find the four corners of the chessboard
-                4. **Perspective Transform:** Warp to 512×512 top-down view
-                
-                **3×3 Block Extraction:**
-                1. **Pad Board:** Add 64px black border around the entire board
-                2. **Extract Blocks:** For each of the 64 squares, extract a 3×3 neighborhood (192×192 pixels)
-                3. **Center Target Square:** Each block is centered on its target square, including 8 surrounding squares
-                4. **Chess Notation:** Label each block by its center square (a8-h1)
-                
-                **Output:** 64 blocks (192×192 pixels each) ready for classification.
-                
-                **Key Insight:** This visualization shows all 64 extracted blocks with their 
-                chess notation labels. The 3×3 context helps the model distinguish similar pieces by 
-                seeing neighboring squares.
-                """
-            },
-            {
-                "name": "Classification",
-                "file": "fen_dirty.jpeg",
-                "title": "Step 3: Model Classification",
-                "description": """
-                **Model Architecture:**
-                - **Base:** ResNet18 (pre-trained on ImageNet)
-                - **Fine-tuning:** Trained on our chess piece dataset
-                - **Output:** 13 classes (6 white pieces + 6 black pieces + empty)
-                
-                **Training Details:**
-                - **Dataset:** ~33K square images from 5 games
-                - **Split:** Train (70%), Val (15%), Test (15%) - split by game
-                - **Augmentation:** Random rotation, brightness, contrast
-                - **Loss:** Cross-entropy with weighted sampling for class balance
-                - **Optimizer:** Adam with learning rate scheduling
-                - **Accuracy:** 92.5% overall
-                
-                **OOD Detection (Out-of-Distribution):**
-                - **Method:** Maximum Softmax Probability (MSP)
-                - **Threshold:** 0.50 (confidence below → "unknown")
-                - **Purpose:** Detect occluded/uncertain squares
-                - **Result:** 85.4% true positive rate on occluded squares
-                
-                **Output:** The visualization is rendered from the FEN string derived from 
-                model predictions. Unknown/occluded squares are marked with red X.
-                """
-            },
-            {
-                "name": "FEN Output",
-                "file": "fen_clean.jpeg",
-                "title": "Step 4: FEN Reconstruction & Integration",
-                "description": """
-                **FEN Generation:**
-                1. **Map predictions** to FEN characters:
-                   - White pieces: P, N, B, R, Q, K
-                   - Black pieces: p, n, b, r, q, k
-                   - Empty squares: counted and compressed (e.g., "3" = 3 empty)
-                   - Unknown squares: "?" (occluded/low confidence)
-                
-                2. **Build FEN string:**
-                   - Process rank-by-rank from rank 8 → rank 1
-                   - Separate ranks with "/"
-                   - Compress consecutive empty squares
-                
-                3. **Add metadata** (if needed):
-                   - Active color (w/b)
-                   - Castling rights (KQkq)
-                   - En passant target
-                   - Halfmove/fullmove counters
-                
-                **Integration:**
-                This complete pipeline can be integrated into:
-                - Chess analysis tools
-                - Game digitization systems
-                - Live streaming overlays
-                - Tournament recording systems
-                
-                **Example FEN:** `rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR`
-                
-                **Final Output:** The reconstructed board can be imported directly into 
-                chess engines (Stockfish, Lichess, Chess.com) for analysis and play.
-                """
-            }
-        ]
+                """)
         
-        # Progress bar
-        progress = (st.session_state.demo_step + 1) / len(steps)
-        st.progress(progress)
-        
-        # Step indicator
-        step_cols = st.columns(len(steps))
-        for i, step in enumerate(steps):
-            with step_cols[i]:
-                if i == st.session_state.demo_step:
-                    st.markdown(f"**→ {step['name']}**")
-                elif i < st.session_state.demo_step:
-                    st.markdown(f"✓ {step['name']}")
-                else:
-                    st.markdown(f"○ {step['name']}")
-        
-        st.markdown("---")
-        
-        # Current step content
-        current_step = steps[st.session_state.demo_step]
-        
-        st.markdown(f"### {current_step['title']}")
-        
-        # Display based on step (some steps show 2 images)
-        if current_step['name'] in ["Classification", "FEN Output"]:
-            # For classification and output steps, show 2 images side by side
-            st.markdown(current_step['description'])
-            
-            st.markdown("---")
-            st.markdown("#### Outputs")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("**Reconstructed Board**")
-                output_dir = Path(__file__).parent / "full_demo"
-                board_path = output_dir / "fen_dirty.jpeg"
-                
-                if board_path.exists():
-                    image = Image.open(board_path)
-                    st.image(image, width=400)
-                else:
-                    st.info("Board visualization")
-            
-            with col2:
-                st.markdown("**Classified Squares (8×8 Grid)**")
-                fen_path = output_dir / "fen_clean.jpeg"
-                
-                if fen_path.exists():
-                    image = Image.open(fen_path)
-                    st.image(image, width=400)
-                else:
-                    st.info("Grid visualization")
-        else:
-            # For other steps, show single image on left, description on right
-            col1, col2 = st.columns([2, 3])
-            
-            with col1:
-                # Load and display image (smaller)
-                output_dir = Path(__file__).parent / "full_demo"
-                image_path = output_dir / current_step['file']
-                
-                if image_path.exists():
-                    image = Image.open(image_path)
-                    st.image(image, width=400)  # Fixed width instead of full container
-                else:
-                    st.error(f"Image not found: {current_step['file']}")
-                    st.info(f"Expected path: {image_path}")
-            
-            with col2:
-                st.markdown(current_step['description'])
-        
-        st.markdown("---")
-        
-        # Navigation buttons
-        col1, col2, col3 = st.columns([1, 2, 1])
-        
-        with col1:
-            if st.session_state.demo_step > 0:
-                if st.button("← Previous", use_container_width=True):
-                    st.session_state.demo_step -= 1
-                    st.rerun()
-        
-        with col2:
-            if st.button("🔄 Reset to Start", use_container_width=True):
-                st.session_state.demo_step = 0
-                st.rerun()
-        
-        with col3:
-            if st.session_state.demo_step < len(steps) - 1:
-                if st.button("Next →", use_container_width=True, type="primary"):
-                    st.session_state.demo_step += 1
-                    st.rerun()
+        # Step 2: Preprocessing
+        with st.expander("**🔄 Step 2: Preprocessing Pipeline**"):
+            preprocessing_path = full_demo_dir / "preprocessing.jpeg"
+            if preprocessing_path.exists():
+                st.image(str(preprocessing_path), caption="64 Extracted 3×3 Blocks", width=700)
             else:
-                st.success("✓ Demo Complete!")
+                st.error("Image not found: preprocessing.jpeg")
+            
+            st.markdown("""
+            **Process:**
+            1. **Board Detection** → Find chessboard corners
+            2. **Perspective Warp** → Transform to 512×512 top-down view
+            3. **3×3 Block Extraction** → Extract 64 blocks (192×192 pixels each)
+            
+            **Output:** 64 blocks ready for classification
+            """)
         
-        # Quick jump
-        st.markdown("---")
-        st.markdown("**Quick Jump:**")
-        jump_cols = st.columns(len(steps))
-        for i, step in enumerate(steps):
-            with jump_cols[i]:
-                if st.button(f"{i+1}. {step['name']}", key=f"jump_{i}", use_container_width=True):
-                    st.session_state.demo_step = i
-                    st.rerun()
+        # Step 3: Classification (with OOD)
+        with st.expander("**🧠 Step 3: Model Classification + OOD Detection**"):
+            col1, col2 = st.columns([1, 1])
+            
+            with col1:
+                fen_dirty_path = full_demo_dir / "fen_dirty.jpeg"
+                if fen_dirty_path.exists():
+                    st.image(str(fen_dirty_path), caption="Classification with OOD (? for uncertain)", width=400)
+                else:
+                    st.error("Image not found: fen_dirty.jpeg")
+                
+                # Show FEN with unknowns
+                fen_dirty_txt = full_demo_dir / "fen.txt"
+                if fen_dirty_txt.exists():
+                    fen_dirty = fen_dirty_txt.read_text().strip()
+                    st.code(fen_dirty, language="text")
+                    st.caption("FEN with '?' for low-confidence predictions")
+            
+            with col2:
+                st.markdown("""
+                **ResNet18 Classification:**
+                - 13 classes (12 pieces + empty)
+                - 92.5% validation accuracy
+                
+                **OOD Detection:**
+                - Confidence threshold: 0.50
+                - Low confidence → "?" (unknown)
+                - Red X marks uncertain squares
+                """)
+        
+        # Step 4: Final Output
+        with st.expander("**✅ Step 4: Final FEN Output**"):
+            col1, col2 = st.columns([1, 1])
+            
+            with col1:
+                fen_clean_path = full_demo_dir / "fen_clean.jpeg"
+                if fen_clean_path.exists():
+                    st.image(str(fen_clean_path), caption="Final Board Reconstruction", width=400)
+                else:
+                    st.error("Image not found: fen_clean.jpeg")
+                
+                # Show clean FEN
+                fen_clean_txt = full_demo_dir / "fen_clean.txt"
+                if fen_clean_txt.exists():
+                    fen_clean = fen_clean_txt.read_text().strip()
+                    st.code(fen_clean, language="text")
+                    st.caption("Clean FEN notation")
+            
+            with col2:
+                st.markdown("""
+                **FEN Reconstruction:**
+                - Convert predictions to standard FEN notation
+                - Compress empty squares (e.g., "3" = 3 empty)
+                - Ready for chess engines (Stockfish, Lichess, Chess.com)
+                
+                **Use Cases:**
+                - Game digitization
+                - Live streaming overlays
+                - Tournament recording
+                - Chess analysis tools
+                """)
         
         # Live Inference Section
         st.markdown("---")
