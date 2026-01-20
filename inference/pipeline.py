@@ -404,7 +404,6 @@ def run_pipeline(
         board_size=board_size,
         border_mode="constant",
         border_color="black",
-        verbose=False,
     )
 
     warped = detector.detect_board(image, debug=False)
