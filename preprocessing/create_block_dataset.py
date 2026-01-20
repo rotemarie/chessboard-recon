@@ -19,8 +19,12 @@ from pathlib import Path
 from tqdm import tqdm
 import pandas as pd
 
-from board_detector import BoardDetector
-from square_extractor import FENParser
+try:
+    from .board_detector import BoardDetector
+    from .square_extractor import FENParser
+except ImportError:
+    from board_detector import BoardDetector
+    from square_extractor import FENParser
 
 
 class BlockSquareExtractor:
@@ -28,7 +32,13 @@ class BlockSquareExtractor:
     Extracts 3×3 blocks centered on each square.
     """
     
-    def __init__(self, board_size: int = 512, border_mode: str = 'constant', border_color: str = 'black'):
+    def __init__(
+        self,
+        board_size: int = 512,
+        border_mode: str = 'constant',
+        border_color: str = 'black',
+        verbose: bool = True,
+    ):
         """
         Initialize the block extractor.
         
@@ -60,12 +70,13 @@ class BlockSquareExtractor:
         self.border_color = self.border_colors.get(border_color, [0, 0, 0])
         self.border_color_name = border_color
         
-        print(f"Square size: {self.square_size}×{self.square_size}")
-        print(f"Block size: {self.block_size}×{self.block_size} squares")
-        print(f"Output size: {self.output_size}×{self.output_size} pixels")
-        print(f"Border handling: {border_mode}")
-        if border_mode == 'constant':
-            print(f"Border color: {border_color}")
+        if verbose:
+            print(f"Square size: {self.square_size}×{self.square_size}")
+            print(f"Block size: {self.block_size}×{self.block_size} squares")
+            print(f"Output size: {self.output_size}×{self.output_size} pixels")
+            print(f"Border handling: {border_mode}")
+            if border_mode == 'constant':
+                print(f"Border color: {border_color}")
     
     def extract_blocks(self, warped_board: np.ndarray) -> list:
         """

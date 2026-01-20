@@ -1,10 +1,9 @@
 # Border Handling for Dataset Creation
 
-When creating padded or block-based datasets, we need to pad beyond the original board boundaries for edge squares. This document explains the different padding strategies.
+When creating block-based datasets, we need to pad beyond the original board boundaries for edge squares. This document explains the different padding strategies.
 
 ## Applies To
 
-- **Padded Dataset (`create_padded_dataset.py`)**: Single squares with 30% padding
 - **Block Dataset (`create_block_dataset.py`)**: 3×3 blocks of squares
 
 ## The Problem
@@ -105,4 +104,5 @@ The border mode affects:
 4. **Training time** - Confusing artifacts → slower convergence
 
 **Bottom line**: The `reflect` mode helps the model focus on actual chess pieces and patterns, not border artifacts.
+
 
