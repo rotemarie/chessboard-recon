@@ -434,6 +434,31 @@ def main():
                          width=700)
             else:
                 st.error("Image not found: architecture.jpeg")
+            
+            # Add metrics below architecture
+            st.markdown("### Overall Metrics")
+            
+            metrics_col1, metrics_col2 = st.columns(2)
+            
+            with metrics_col1:
+                st.markdown("""
+                **Performance:**
+                - Validation Accuracy: **92.51%**
+                - Empty squares: **95.2%**
+                - Kings/Queens: **~93%**
+                - Pawns: **~87%**
+                - Board detection: **92.1%**
+                """)
+            
+            with metrics_col2:
+                st.markdown("""
+                **Error Analysis:**
+                - Similar pieces: **35%**
+                - Piece cropping: **27%**
+                - Lighting: **15%**
+                - Occlusions: **13%**
+                - Other: **10%**
+                """)
         
         with col2:
             st.markdown("## Our Solution")
@@ -552,6 +577,21 @@ def main():
                 else:
                     st.error("Image not found: hist vs val.png")
             
+            # Add batch distribution image
+            st.markdown("#### Batch Distribution (Imbalanced Dataset)")
+            st.markdown("""
+            **Problem:** Imbalanced dataset batches are dominated by majority class, 
+            which causes only the loss on majority class to be optimized.
+            """)
+            
+            batch_counts_path = Path(__file__).parent / "for_ui" / "counts_mean_batches2.jpeg"
+            if batch_counts_path.exists():
+                st.image(str(batch_counts_path), 
+                         caption="Mean Counts of Batches - Dominated by Empty Squares", 
+                         width=700)
+            else:
+                st.error("Image not found: counts_mean_batches2.jpeg")
+            
             st.markdown("---")
             
             # Solutions
@@ -592,7 +632,6 @@ def main():
                 
                 **Cons:**
                 - ❌ **Val set and training set differ in distribution**
-                - Requires defining two different losses (train vs val)
                 - Complicates training pipeline
                 """)
             
@@ -613,7 +652,6 @@ def main():
                 
                 **Cons:**
                 - Some images may never be seen in an epoch
-                - Evaluation becomes not fully reproducible
                 """)
             
             st.success("""
@@ -753,9 +791,7 @@ def main():
             st.success("""
             **✓ Final Choice: ResNet18 (Fine-tuned)**
             
-            Sweet 89% is a good result! But can we improve it further? 
-            
-            → This question led us to Challenge 3: investigating preprocessing methods...
+            Sweet 89% is a good result! But can we improve it further?
             """)
         
         # Challenge 3: Preprocessing Methods (updated content)
@@ -886,13 +922,6 @@ def main():
                 - Black border padding at edges
                 - Captures piece tops
                 - **Validation Accuracy: 90.36% (30% padding)**
-                
-                **Advantage:** 
-                Captures piece tops without excessive context. Good balance between 
-                capturing full piece and maintaining focus on target square.
-                
-                **Issue:** 
-                Still misses neighboring context that could help distinguish similar pieces.
                 """)
             
             with col3:
@@ -1244,293 +1273,210 @@ def main():
         
     # Tab 3: Pipeline (functionality and integration)
     with tab3:
-        st.markdown('<div class="sub-header">Complete Processing Pipeline</div>', 
+        st.markdown('<div class="sub-header">Final Pipeline Architecture</div>', 
                     unsafe_allow_html=True)
         
-        # Create nested tabs for pipeline functionality
-        pipeline_tab1, pipeline_tab2, pipeline_tab3 = st.tabs([
-            "🔄 Preprocessing Pipeline", "🧠 Training & OOD Detection", "🔗 Integration & Deployment"
-        ])
+        st.markdown("""
+        This section describes our final implementation choices and system performance.
+        """)
         
-        # Pipeline Tab 1: Preprocessing Pipeline
-        with pipeline_tab1:
-            st.markdown("### Preprocessing Pipeline Implementation")
-            
-            st.markdown("---")
-            
-            st.markdown("#### Technical Implementation: 3×3 Block Extraction")
+        st.markdown("---")
         
-            impl_col1, impl_col2 = st.columns(2)
+        # Section 1: Preprocessing
+        st.markdown("### 1. Preprocessing: 3×3 Block Extraction")
+        
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            st.markdown("**Process:**")
+            st.markdown("""
+            1. **Board Detection** - Edge detection & perspective warp
+            2. **Transform** - 512×512 top-down view
+            3. **Padding** - Add 64px black border (640×640 total)
+            4. **Block Extraction** - Extract 3×3 neighborhoods (192×192 each)
+            5. **Labeling** - Parse FEN notation → 13 classes
             
-            with impl_col1:
-                st.markdown("**Step-by-Step Process:**")
-                st.markdown("""
-                1. **Board Detection** - Locate the chessboard in the image using edge detection
-                2. **Perspective Warp** - Transform to perfect top-down 512×512 view
-                3. **Padding** - Add 64px black border on all sides (total: 640×640)
-                4. **Block Extraction**
-                   - For each of 64 squares:
-                     - Extract 3×3 neighborhood (192×192 pixels)
-                     - Center on target square
-                     - Include 8 surrounding squares
-                5. **Labeling**
-                   - Parse FEN notation
-                   - Assign labels (13 classes)
-                   - Validate 64 total squares
-                """)
+            **Output:** 64 blocks, one per square
+            """)
             
-            with impl_col2:
-                st.markdown("**Key Benefits:**")
-                st.markdown("""
-                ✓ **Spatial Context:**
-                - Model sees neighboring pieces
-                - Better distinguishes similar pieces
-                - Understands board position
-                
-                ✓ **Complete Piece Coverage:**
-                - Captures tall pieces fully
-                - No cropping at boundaries
-                - Consistent input size
-                
-                ✓ **Edge Handling:**
-                - Black padding at board edges
-                - No distortion or artifacts
-                - Natural appearance
-                """)
-                
-                st.code("""
-# Block extraction parameters
+            st.code("""
+# Final parameters
 Board size: 512×512 pixels
-Square size: 64×64 pixels
 Padding: 64 pixels (black)
-Block size: 192×192 pixels (3×3 squares)
-Total blocks: 64 (one per square)
-                """, language="python")
+Block size: 192×192 pixels
+Total blocks: 64
+            """, language="python")
         
-        # Pipeline Tab 2: Training & OOD
-        with pipeline_tab2:
-            st.markdown("### Model Training and OOD Detection")
+        with col2:
+            st.markdown("**Why 3×3 Blocks?**")
+            st.markdown("""
+            ✓ **Spatial Context** - Model sees neighboring pieces
             
-            st.markdown("---")
+            ✓ **Complete Piece Coverage** - Captures tall pieces fully
             
-            # Section 1: Model Training
-            st.markdown("#### 1. Model Architecture and Training")
+            ✓ **Better Distinction** - Helps differentiate similar pieces
+            
+            ✓ **Best Validation Accuracy** - 92.51% (vs 89% for single squares)
+            
+            **Comparison:**
+            - Original crop: 89.08%
+            - Padded (30%): 90.36%
+            - **3×3 blocks: 92.51%** ✓
+            """)
         
-            col1, col2 = st.columns([2, 3])
+        st.markdown("---")
+        
+        # Section 2: Model Training
+        st.markdown("### 2. Model Architecture & Training")
+        
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            st.markdown("**Model: ResNet18 (Fine-tuned)**")
+            st.markdown("""
+            **Architecture:**
+            - Base: ResNet18 pre-trained on ImageNet
+            - Input: 192×192 RGB images
+            - Output: 13 classes (6 white + 6 black + empty)
+            - Parameters: 11M
             
-            with col1:
-                st.markdown("**Model Selection**")
-                st.markdown("""
-                **Tested architectures:**
-                - ResNet18 (11M params) ✓ **Best**
-                - ResNet50 (23M params)
-                - VGG16 (138M params)
-                
-                **Training modes:**
-                - **Fine-tuning:** Train all layers (chosen)
-                - **Transfer learning:** Freeze backbone, train final layer only
-                
-                **Why ResNet18?**
-                - Best accuracy with 3×3 blocks (92.51%)
-                - Reasonable training time
-                - Good speed-accuracy tradeoff
-                """)
+            **Why ResNet18?**
+            - Best accuracy with 3×3 blocks
+            - Reasonable training time (~2-3 hours)
+            - Good speed-accuracy tradeoff
+            """)
             
-            with col2:
-                st.markdown("**Training Configuration**")
-                st.code("""
-# Hyperparameters
-Model: ResNet18 (fine-tuned from ImageNet)
-Input: 192×192 (3×3 blocks)
+            st.code("""
+# Training configuration
 Optimizer: SGD (lr=0.001, momentum=0.9)
 Scheduler: StepLR (step_size=7, gamma=0.1)
 Batch size: 16
 Loss: Cross-entropy
+Class balancing: Weighted sampler
 Early stopping: patience=10
-
-# Training results (3×3 blocks with black padding)
-Epochs to convergence: ~15-20
-Training accuracy: 99.15%
-Validation accuracy: 92.51% ✓
-Training time: ~2-3 hours (GPU)
-                """, language="python")
-            
-            st.markdown("---")
-            
-            # Section 2: OOD Detection
-            st.markdown("#### 2. Out-of-Distribution (OOD) Detection")
+            """, language="python")
         
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("**Problem: Occlusions**")
-                st.markdown("""
-                **Observation:** ~13% of validation errors due to occlusions
-                - Hands covering pieces
-                - Other pieces blocking view
-                - Poor lighting/shadows
-                
-                **Challenge:** Model outputs high-confidence wrong predictions
-                
-                **Solution:** Confidence-based OOD detection
-                """)
-                
-                st.markdown("**Method: Maximum Softmax Probability**")
-                st.markdown("""
-                1. Compute softmax probabilities
-                2. Take maximum probability as confidence score
-                3. If confidence < threshold → mark as "unknown"
-                
-                **Threshold selection:** 0.80
-                - Based on clean vs occluded distribution analysis
-                - 5th percentile of clean confidence
-                """)
-            
-            with col2:
-                st.markdown("**Results**")
-                st.markdown("""
-                **Clean images:**
-                - Mean confidence: 0.94 ± 0.08
-                - False positive rate: 4.8%
-                
-                **Occluded images:**
-                - Mean confidence: 0.62 ± 0.21
-                - True positive rate: 85.4%
-                
-                **Confidence separation:** 0.32
-                
-                → Clear separation validates the approach!
-                """)
-                
-                st.info("""
-                **In practice:**
-                - Model predicts normally
-                - Low-confidence predictions → "?"
-                - FEN output includes unknowns
-                - User can manually verify ambiguous squares
-                """)
-        
-        # Pipeline Tab 3: Integration
-        with pipeline_tab3:
-            st.markdown("### Board Reconstruction and Integration")
-            
-            st.markdown("---")
-            
-            # Section 1: Final Pipeline
-            st.markdown("#### 1. Complete Pipeline")
-            
+        with col2:
+            st.markdown("**Training Results:**")
             st.markdown("""
-            **End-to-End Process:**
+            **Dataset:**
+            - 5 labeled games (517 frames)
+            - ~30K labeled squares
+            - Split by game (70/15/15)
             
-            ```
-            Input Image → Board Detection → Perspective Transform → 3×3 Block Extraction
-                                                                              ↓
-            FEN Output ← FEN Generator ← OOD Detection ← ResNet18 Classification ← 64 Blocks
-            ```
+            **Performance:**
+            - Training accuracy: 99.15%
+            - **Validation accuracy: 92.51%**
+            - Epochs to convergence: ~15-20
             
-            **Output Format:** FEN notation with optional '?' for unknowns
-            - Standard: `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR`
-            - With unknowns: `rnbqkbnr/pppp?ppp/8/8/8/8/PPPPPPPP/RNBQKBNR`
+            **Per-Class Performance:**
+            - Empty squares: 95.2%
+            - Kings/Queens: ~93%
+            - Pawns: ~87%
+            - Board detection: 92.1%
             """)
+        
+        st.markdown("---")
+        
+        # Section 3: OOD Detection
+        st.markdown("### 3. Out-of-Distribution Detection")
+        
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            st.markdown("**Method: Confidence Thresholding**")
+            st.markdown("""
+            **Problem:** ~13% of errors due to occlusions (hands, shadows, etc.)
             
-            st.markdown("---")
+            **Solution:** Maximum Softmax Probability
+            1. Compute softmax probabilities
+            2. Take maximum as confidence score
+            3. If confidence < 0.50 → mark as "unknown"
             
-            # Section 2: Performance Metrics
-            st.markdown("#### 2. System Performance")
+            **Threshold: 0.50**
+            - Balances false positives vs true positives
+            - Prefers missing some occlusions over mis-labeling clean images
+            """)
+        
+        with col2:
+            st.markdown("**Results:**")
+            st.markdown("""
+            **Clean images:**
+            - Mean confidence: 0.94 ± 0.08
+            - False positive rate: 4.8%
             
-            col1, col2, col3 = st.columns(3)
+            **Occluded images:**
+            - Mean confidence: 0.62 ± 0.21
+            - True positive rate: 85.4%
             
-            with col1:
-                st.markdown("**Overall Metrics**")
-                st.markdown("""
-                - **Validation Accuracy:** 92.51%
-                - **Empty squares:** 95.2%
-                - **Kings/Queens:** ~93%
-                - **Pawns:** ~87%
-                - **Board detection:** 92.1%
-                """)
+            **Confidence separation: 0.32** → Clear distinction!
             
-            with col2:
-                st.markdown("**Error Analysis**")
-                st.markdown("""
-                **Main error sources:**
-                - Similar pieces: 35%
-                - Piece cropping: 27%
-                - Lighting: 15%
-                - Occlusions: 13%
-                - Other: 10%
-                """)
-            
-            with col3:
-                st.markdown("**Deployment**")
-                st.markdown("""
-                **Output:**
-                - FEN notation
-                - Reconstructed board (SVG)
-                - 64 classified squares (grid)
-                - Confidence scores
-                - Unknown markers (red X)
-                """)
-            
-            st.markdown("---")
-            
-            # Section 3: Usage
-            st.markdown("#### 3. How to Use")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("**Command Line:**")
-                st.code("""
+            **Output:** FEN with '?' for uncertain squares
+            - Example: `rnbqk?nr/pppp1ppp/8/8/...`
+            """)
+        
+        st.markdown("---")
+        
+        # Section 4: System Performance
+        st.markdown("### 4. Overall System Performance")
+        
+        metric_col1, metric_col2, metric_col3 = st.columns(3)
+        
+        with metric_col1:
+            st.markdown("**Metrics**")
+            st.metric("Validation Accuracy", "92.51%")
+            st.metric("Board Detection", "92.1%")
+            st.metric("OOD Detection", "85.4%")
+        
+        with metric_col2:
+            st.markdown("**Error Sources**")
+            st.markdown("""
+            - Similar pieces: 35%
+            - Piece cropping: 27%
+            - Lighting: 15%
+            - Occlusions: 13%
+            - Other: 10%
+            """)
+        
+        with metric_col3:
+            st.markdown("**Output**")
+            st.markdown("""
+            - FEN notation
+            - Board SVG
+            - Confidence scores
+            - 64 classified blocks
+            - Unknown markers
+            """)
+        
+        st.markdown("---")
+        
+        # Section 5: Usage
+        st.markdown("### 5. How to Use")
+        
+        usage_col1, usage_col2 = st.columns(2)
+        
+        with usage_col1:
+            st.markdown("**Command Line:**")
+            st.code("""
 python inference/pipeline.py \\
-    --image path/to/board.jpg \\
+    --image board.jpg \\
     --model model/resnet18_ft_blocks_black.pth \\
-    --classes-file model/classes.txt \\
     --threshold 0.80 \\
-    --output-dir outputs/ \\
     --save-grid
-                """, language="bash")
-            
-            with col2:
-                st.markdown("**Python API:**")
-                st.code("""
+            """, language="bash")
+        
+        with usage_col2:
+            st.markdown("**Python API:**")
+            st.code("""
 from inference.pipeline import run_pipeline
 
 run_pipeline(
     image_path="board.jpg",
     model_path="model/resnet18_ft_blocks_black.pth",
-    classes_file="model/classes.txt",
     threshold=0.80,
     save_grid=True
 )
-                """, language="python")
-            
-            st.markdown("---")
-            
-            # Section 4: Future Work
-            st.markdown("#### 4. Future Improvements")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("**Model Enhancements:**")
-                st.markdown("""
-                - Ensemble methods for higher accuracy
-                - Attention mechanisms for piece focus
-                - Advanced OOD detection (Mahalanobis distance, energy-based)
-                - Domain adaptation for different board styles
-                """)
-            
-            with col2:
-                st.markdown("**System Extensions:**")
-                st.markdown("""
-                - Temporal modeling for video streams
-                - Real-time processing optimization
-                - Mobile deployment
-                - Chess rule validation (legal moves)
-                """)
-        
-        # Add back to top button
+            """, language="python")
     
     # Tab 4: Full Demo (Interactive Walkthrough)
     with tab4:
