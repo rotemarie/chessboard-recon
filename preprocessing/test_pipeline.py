@@ -11,12 +11,8 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import sys
 
-try:
-    from .board_detector import BoardDetector
-    from .square_extractor import SquareExtractor, FENParser
-except ImportError:
-    from board_detector import BoardDetector
-    from square_extractor import SquareExtractor, FENParser
+from board_detector import BoardDetector
+from square_extractor import SquareExtractor, FENParser
 
 
 def test_board_detection():

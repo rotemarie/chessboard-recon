@@ -18,7 +18,7 @@ import random
 from pathlib import Path
 from collections import defaultdict
 import json
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 
 class DatasetSplitter:
@@ -315,7 +315,7 @@ def main():
     """
     import argparse
     
-    parser = argparse.ArgumentParser(description='Split dataset by game')
+    parser = argparse.ArgumentParser(description='Split dataset into train/val/test')
     parser.add_argument('--preprocessed-root', type=str,
                        default='/Users/rotemar/Documents/BGU/Intro to Deep Learning/final project/chessboard-recon/preprocessed_data',
                        help='Root directory with preprocessed_data/train/')
@@ -327,9 +327,9 @@ def main():
     parser.add_argument('--test-ratio', type=float, default=0.15,
                        help='Test set ratio (default: 0.15)')
     parser.add_argument('--seed', type=int, default=42,
-                       help='Random seed (default: 42)')
-    parser.add_argument('--symlink', action='store_true',
-                       help='Use symlinks instead of copying files')
+                       help='Random seed for reproducibility (default: 42)')
+    parser.add_argument('--symlinks', action='store_true',
+                       help='Create symlinks instead of copying files (faster)')
     
     args = parser.parse_args()
     
@@ -340,7 +340,7 @@ def main():
         val_ratio=args.val_ratio,
         test_ratio=args.test_ratio,
         seed=args.seed,
-        copy_files=not args.symlink
+        copy_files=not args.symlinks
     )
     
     # Split dataset

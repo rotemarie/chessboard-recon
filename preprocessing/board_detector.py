@@ -9,7 +9,8 @@ This module handles:
 
 import cv2
 import numpy as np
-from typing import Optional
+from typing import Tuple, Optional, List
+import matplotlib.pyplot as plt
 
 
 class BoardDetector:
@@ -82,7 +83,6 @@ class BoardDetector:
         edges = cv2.Canny(blurred, 50, 150)
         
         if debug:
-            import matplotlib.pyplot as plt
             plt.figure(figsize=(15, 5))
             plt.subplot(131)
             plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
@@ -145,7 +145,6 @@ class BoardDetector:
         morph = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=2)
         
         if debug:
-            import matplotlib.pyplot as plt
             plt.figure(figsize=(10, 5))
             plt.subplot(121)
             plt.imshow(thresh, cmap='gray')
@@ -253,7 +252,6 @@ class BoardDetector:
             cv2.line(img_with_corners, pt1, pt2, (0, 255, 0), 2)
         
         # Display results
-        import matplotlib.pyplot as plt
         plt.figure(figsize=(15, 5))
         plt.subplot(121)
         plt.imshow(cv2.cvtColor(img_with_corners, cv2.COLOR_BGR2RGB))
@@ -264,4 +262,35 @@ class BoardDetector:
         plt.show()
 
 
+def test_detector():
+    """
+    Test the board detector on a sample image.
+    """
+    import os
+    
+    # Path to a sample image
+    sample_image_path = "/Users/rotemar/Documents/BGU/Intro to Deep Learning/final project/chessboard-recon/data/per_frame/game2_per_frame/tagged_images/frame_000200.jpg"
+    
+    if not os.path.exists(sample_image_path):
+        print(f"Sample image not found: {sample_image_path}")
+        return
+    
+    # Load image
+    image = cv2.imread(sample_image_path)
+    print(f"Loaded image with shape: {image.shape}")
+    
+    # Create detector
+    detector = BoardDetector(board_size=512)
+    
+    # Detect and warp board
+    warped = detector.detect_board(image, debug=True)
+    
+    if warped is not None:
+        print(f"Successfully warped board to shape: {warped.shape}")
+    else:
+        print("Board detection failed")
+
+
+if __name__ == "__main__":
+    test_detector()
 

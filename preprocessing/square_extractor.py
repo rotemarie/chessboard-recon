@@ -9,7 +9,8 @@ This module handles:
 
 import cv2
 import numpy as np
-from typing import List
+from typing import List, Tuple, Dict
+import os
 
 
 class SquareExtractor:
@@ -230,4 +231,54 @@ class FENParser:
         return classes
 
 
+def test_extractor():
+    """
+    Test the square extractor on a sample warped board.
+    """
+    from board_detector import BoardDetector
+    import os
+    
+    # Path to sample image
+    sample_image_path = "/Users/rotemar/Documents/BGU/Intro to Deep Learning/final project/chessboard-recon/data/per_frame/game2_per_frame/tagged_images/frame_000200.jpg"
+    
+    if not os.path.exists(sample_image_path):
+        print(f"Sample image not found: {sample_image_path}")
+        return
+    
+    # Load and warp image
+    image = cv2.imread(sample_image_path)
+    detector = BoardDetector(board_size=512)
+    warped = detector.detect_board(image, debug=False)
+    
+    if warped is None:
+        print("Failed to detect board")
+        return
+    
+    # Extract squares
+    extractor = SquareExtractor(board_size=512)
+    squares = extractor.extract_squares(warped)
+    
+    print(f"Extracted {len(squares)} squares")
+    
+    # Parse FEN for this frame
+    fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"  # Starting position
+    labels = FENParser.fen_to_labels(fen)
+    
+    print(f"FEN: {fen}")
+    print(f"Labels: {labels[:8]}...")  # First rank
+    
+    # Visualize some squares
+    extractor.visualize_squares(squares, labels, num_display=16)
+    
+    # Test FEN conversion
+    reconstructed_fen = FENParser.labels_to_fen(labels)
+    print(f"Reconstructed FEN: {reconstructed_fen}")
+    print(f"Match: {fen == reconstructed_fen}")
+    
+    # Print all piece classes
+    print(f"\nAll piece classes: {FENParser.get_piece_classes()}")
+
+
+if __name__ == "__main__":
+    test_extractor()
 
