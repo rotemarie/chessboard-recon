@@ -17,6 +17,7 @@ sys.path.append(str(Path(__file__).parent / 'inference'))
 
 from preprocessing.board_detector import BoardDetector
 from preprocessing.square_extractor import SquareExtractor, FENParser
+from preprocessing.create_block_dataset import BlockSquareExtractor
 
 # Try to import inference pipeline (lazy import to avoid permission errors)
 INFERENCE_AVAILABLE = False
@@ -126,12 +127,16 @@ def init_session_state():
         st.session_state.predictions = None
     if 'fen' not in st.session_state:
         st.session_state.fen = None
+    if 'fen_clean' not in st.session_state:
+        st.session_state.fen_clean = None
     if 'model' not in st.session_state:
         st.session_state.model = None
     if 'class_names' not in st.session_state:
         st.session_state.class_names = None
     if 'board_svg' not in st.session_state:
         st.session_state.board_svg = None
+    if 'board_svg_clean' not in st.session_state:
+        st.session_state.board_svg_clean = None
     if 'confidences' not in st.session_state:
         st.session_state.confidences = None
     if 'unknown_indices' not in st.session_state:
@@ -197,19 +202,24 @@ def run_inference_pipeline(image_path, model_path=None, threshold=0.50):
             save_square_crops=False,
             print_squares=False,
             crops_dir=None,
-            save_grid=True
+            save_grid=True,
+            save_clean_board=True
         )
         
         # Read the results
         original = cv2.imread(str(image_path))
         warped = cv2.imread(str(temp_output / "warped_board.jpg"))
         fen_path = temp_output / "fen.txt"
+        fen_clean_path = temp_output / "fen_clean.txt"
         svg_path = temp_output / "board.svg"
+        svg_clean_path = temp_output / "fen.svg"
         predictions_path = temp_output / "predictions.json"
         grid_path = temp_output / "crops_grid.jpg"
         
         fen = fen_path.read_text(encoding="utf-8") if fen_path.exists() else None
+        fen_clean = fen_clean_path.read_text(encoding="utf-8") if fen_clean_path.exists() else None
         board_svg = svg_path.read_text(encoding="utf-8") if svg_path.exists() else None
+        board_svg_clean = svg_clean_path.read_text(encoding="utf-8") if svg_clean_path.exists() else None
         
         # Load predictions
         predictions = []
@@ -232,7 +242,9 @@ def run_inference_pipeline(image_path, model_path=None, threshold=0.50):
             "confidences": confidences,
             "unknown_indices": unknown_indices,
             "fen": fen,
+            "fen_clean": fen_clean,
             "board_svg": board_svg,
+            "board_svg_clean": board_svg_clean,
             "predictions": predictions
         }
     
@@ -242,10 +254,14 @@ def run_inference_pipeline(image_path, model_path=None, threshold=0.50):
 
 
 def preprocess_image(image_array, show_debug=False):
-    """Preprocess the chess board image."""
+    """Preprocess the chess board image using 3x3 block extraction."""
     # Initialize processors
     detector = BoardDetector(board_size=512)
-    extractor = SquareExtractor(board_size=512)
+    block_extractor = BlockSquareExtractor(
+        board_size=512,
+        border_mode="constant",
+        border_color="black"
+    )
     
     # Detect and warp board
     with st.spinner("Detecting chessboard..."):
@@ -254,23 +270,32 @@ def preprocess_image(image_array, show_debug=False):
     if warped_board is None:
         return None, None
     
-    # Extract squares
-    with st.spinner("Extracting 64 squares..."):
-        squares = extractor.extract_squares(warped_board)
+    # Extract 3x3 blocks
+    with st.spinner("Extracting 64 blocks (3×3 context)..."):
+        blocks = block_extractor.extract_blocks(warped_board)
     
-    return warped_board, squares
+    return warped_board, blocks
 
 
 def create_grid_image(squares, labels=None, predictions=None):
-    """Create an 8x8 grid visualization of squares."""
-    if squares is None:
+    """Create an 8x8 grid visualization of squares/blocks."""
+    if squares is None or len(squares) == 0:
         return None
     
-    # Parameters
-    square_size = 64
+    # Detect the actual size of the input squares/blocks
+    input_size = squares[0].shape[0]  # Could be 64x64 or 192x192
+    
+    # Dynamically scale visualization
+    if input_size > 100:
+        # For large blocks (192x192), scale down to fit in grid
+        display_size = 80
+    else:
+        # For small squares (64x64), keep original size
+        display_size = 64
+    
     border = 2
     label_height = 30
-    cell_size = square_size + border * 2
+    cell_size = display_size + border * 2
     
     # Create canvas
     grid_height = 8 * (cell_size + label_height)
@@ -285,21 +310,27 @@ def create_grid_image(squares, labels=None, predictions=None):
         y_start = row * (cell_size + label_height) + border
         x_start = col * cell_size + border
         
+        # Resize square to display size if needed
+        if square.shape[0] != display_size or square.shape[1] != display_size:
+            resized_square = cv2.resize(square, (display_size, display_size))
+        else:
+            resized_square = square
+        
         # Place square
-        grid[y_start:y_start+square_size, x_start:x_start+square_size] = square
+        grid[y_start:y_start+display_size, x_start:x_start+display_size] = resized_square
         
         # Add label below
         file_letter = chr(ord('a') + col)
         rank_number = 8 - row
         position = f"{file_letter}{rank_number}"
         
-        label_y = y_start + square_size + 20
+        label_y = y_start + display_size + 20
         label_x = x_start + 10
         
         # Draw background
         cv2.rectangle(grid, 
-                     (x_start, y_start + square_size),
-                     (x_start + square_size, y_start + square_size + label_height),
+                     (x_start, y_start + display_size),
+                     (x_start + display_size, y_start + display_size + label_height),
                      (245, 245, 245), -1)
         
         # Draw position
@@ -344,7 +375,7 @@ def main():
         This system uses deep learning to:
         1. **Detect** chessboards in images
         2. **Warp** to top-down view
-        3. **Extract** 64 individual squares
+        3. **Extract** 64 3×3 block crops (centered on each square)
         4. **Classify** each piece (13 classes)
         5. **Detect** occlusions (OOD)
         6. **Reconstruct** board in FEN notation
@@ -394,14 +425,15 @@ def main():
             5. **Reconstruct** the complete board state in FEN notation
             """)
             
-            st.markdown("## Key Challenges")
-            st.markdown("""
-            - **Arbitrary camera angles** - boards photographed from various perspectives
-            - **Varying lighting conditions** - shadows, highlights, different environments
-            - **Occlusions** - hands, other pieces, or objects blocking the view
-            - **Piece similarity** - distinguishing between similar pieces (e.g., bishop vs pawn)
-            - **No temporal information** - single static images only (no video context)
-            """)
+            st.markdown("## System Architecture")
+            
+            architecture_path = Path(__file__).parent / "architecture.jpeg"
+            if architecture_path.exists():
+                st.image(str(architecture_path), 
+                         caption="Complete Pipeline Architecture", 
+                         width=700)
+            else:
+                st.error("Image not found: architecture.jpeg")
         
         with col2:
             st.markdown("## Our Solution")
@@ -614,6 +646,36 @@ def main():
             - After: All classes represented more equally in each batch
             - This leads to better per-class accuracy, especially for rare pieces (queens, kings, knights)
             """)
+            
+            st.markdown("---")
+            
+            # Balanced vs Imbalanced Comparison
+            st.markdown("#### Balanced Dataset vs Imbalanced Dataset")
+            
+            st.markdown("""
+            To validate our approach, we compared training with a balanced dataset versus the original imbalanced dataset:
+            
+            - **Balanced model:** Trained with balanced training set and hyperparameters tuned on balanced validation set
+            - **Imbalanced model:** Trained with imbalanced training set and hyperparameters tuned on imbalanced validation set
+            
+            Both models used the original tile cropping method (64×64 squares).
+            """)
+            
+            balanced_path = Path(__file__).parent / "for_ui" / "balanced_v_unbalanced.png"
+            if balanced_path.exists():
+                st.image(str(balanced_path), 
+                         caption="Comparison: Balanced vs Imbalanced Training", 
+                         width=700)
+            else:
+                st.error("Image not found: balanced_v_unbalanced.png")
+            
+            st.info("""
+            **Key Findings:**
+            - Balanced model shows better validation accuracy
+            - However, on a balanced clean test set, the balanced model performs better
+            - On an imbalanced clean test set (closer to real-world distribution), both perform similarly
+            - This validates our weighted sampler approach for handling class imbalance
+            """)
         
         # Challenge 2: Model Selection
         with challenge_tab2:
@@ -764,7 +826,7 @@ def main():
                 if error_examples_path.exists():
                     st.image(str(error_examples_path), 
                              caption="Error Examples: Pieces Cut Off at Top",
-                             width='stretch')
+                             width=400)
                 else:
                     st.error("Image not found: error examples.png")
                 
@@ -925,7 +987,7 @@ def main():
                 if confusing_pieces_path.exists():
                     st.image(str(confusing_pieces_path), 
                              caption="Comparison: White vs Black Pieces - Shading Visibility",
-                             width='stretch')
+                             width=500)
                 else:
                     st.error("Image not found: confusing_pieces.png")
             
@@ -968,7 +1030,7 @@ def main():
                 if black_shading_path.exists():
                     st.image(str(black_shading_path), 
                              caption="Before/After: Contrast Enhancement on Black Pieces",
-                             width='stretch')
+                             width=500)
                 else:
                     st.error("Image not found: black_shading.png")
             
@@ -978,7 +1040,7 @@ def main():
                 if white_shading_path.exists():
                     st.image(str(white_shading_path), 
                              caption="Before/After: Contrast Enhancement on White Pieces",
-                             width='stretch')
+                             width=500)
                 else:
                     st.error("Image not found: white_shading.png")
             
@@ -994,7 +1056,7 @@ def main():
                 if shading_res_path.exists():
                     st.image(str(shading_res_path), 
                              caption="Training Results: Contrast Enhancement Actually Worsened Performance",
-                             width='stretch')
+                             width=600)
                 else:
                     st.error("Image not found: shading_training_res.png")
             
@@ -1071,11 +1133,11 @@ def main():
             st.markdown("---")
             
             # Solution
-            st.markdown("#### Solution: Train on Clean, Detect via Confidence")
+            st.markdown("#### Solution: Train on Dirty Data, Detect via Confidence")
             
             st.markdown("""
             **Our Approach:**
-            1. Train the model while **ignoring the existence of occluded images**
+            1. Train the model on **dirty data** (includes occluded images)
             2. Occluded images add noise to training, but they're a small fraction (~1-2%) so noise impact is minimal
             3. After training, use **confidence thresholding** to detect occlusions
             """)
@@ -1179,7 +1241,7 @@ def main():
                          width=800)
             else:
                 st.error("Image not found: 33_vs_og_ood.png")
-    
+        
     # Tab 3: Pipeline (functionality and integration)
     with tab3:
         st.markdown('<div class="sub-header">Complete Processing Pipeline</div>', 
@@ -1467,6 +1529,8 @@ run_pipeline(
                 - Mobile deployment
                 - Chess rule validation (legal moves)
                 """)
+        
+        # Add back to top button
     
     # Tab 4: Full Demo (Interactive Walkthrough)
     with tab4:
@@ -1474,357 +1538,99 @@ run_pipeline(
                     unsafe_allow_html=True)
         
         st.markdown("""
-        This interactive demo walks through the complete process from input image to final FEN output.
-        Use the controls below to navigate through each stage.
+        Click on each step below to see the pipeline in action.
         """)
         
-        # Initialize step state
-        if 'demo_step' not in st.session_state:
-            st.session_state.demo_step = 0
+        full_demo_dir = Path(__file__).parent / "full_demo"
         
-        # Define pipeline steps
-        steps = [
-            {
-                "name": "Input",
-                "file": "preprocessed.jpeg",
-                "title": "Step 1: Input Image",
-                "description": """
-                **Input:** Raw photo of a physical chessboard taken from an arbitrary angle.
+        # Step 1: Input
+        with st.expander("**📥 Step 1: Input Image**", expanded=True):
+            col1, col2 = st.columns([1, 1])
+            
+            with col1:
+                og_path = full_demo_dir / "og.jpeg"
+                if og_path.exists():
+                    st.image(str(og_path), caption="Original Image", width=400)
+                else:
+                    st.error("Image not found: og.jpeg")
+            
+            with col2:
+                st.markdown("""
+                **Input:** Raw photo of a physical chessboard.
                 
                 **Challenges:**
                 - Perspective distortion
-                - Varying lighting conditions
+                - Varying lighting
                 - Background clutter
                 - Different camera angles
-                - Pieces at various heights
-                
-                **Goal:** Transform this raw image into a format suitable for piece classification.
-                """
-            },
-            {
-                "name": "Preprocessing",
-                "file": "processed.jpeg",
-                "title": "Step 2: Preprocessing Pipeline",
-                "description": """
-                **Board Localization & Warping:**
-                1. **Edge Detection:** Canny edge detector finds board boundaries
-                2. **Contour Detection:** Identify quadrilateral shapes
-                3. **Corner Detection:** Find the four corners of the chessboard
-                4. **Perspective Transform:** Warp to 512×512 top-down view
-                
-                **3×3 Block Extraction:**
-                1. **Pad Board:** Add 64px black border around the entire board
-                2. **Extract Blocks:** For each of the 64 squares, extract a 3×3 neighborhood (192×192 pixels)
-                3. **Center Target Square:** Each block is centered on its target square, including 8 surrounding squares
-                4. **Chess Notation:** Label each block by its center square (a8-h1)
-                
-                **Output:** 64 blocks (192×192 pixels each) ready for classification.
-                
-                **Key Insight:** This visualization shows all 64 extracted blocks with their 
-                chess notation labels. The 3×3 context helps the model distinguish similar pieces by 
-                seeing neighboring squares.
-                """
-            },
-            {
-                "name": "Classification",
-                "file": "board.jpeg",
-                "title": "Step 3: Model Classification",
-                "description": """
-                **Model Architecture:**
-                - **Base:** ResNet18 (pre-trained on ImageNet)
-                - **Fine-tuning:** Trained on our chess piece dataset
-                - **Output:** 13 classes (6 white pieces + 6 black pieces + empty)
-                
-                **Training Details:**
-                - **Dataset:** ~33K square images from 5 games
-                - **Split:** Train (70%), Val (15%), Test (15%) - split by game
-                - **Augmentation:** Random rotation, brightness, contrast
-                - **Loss:** Cross-entropy with weighted sampling for class balance
-                - **Optimizer:** Adam with learning rate scheduling
-                - **Accuracy:** 89.08% overall, 95.2% on empty squares
-                
-                **OOD Detection (Out-of-Distribution):**
-                - **Method:** Maximum Softmax Probability (MSP)
-                - **Threshold:** 0.50 (confidence below → "unknown")
-                - **Purpose:** Detect occluded/uncertain squares
-                - **Result:** 85.4% true positive rate on occluded squares
-                
-                **Output:** The visualization is rendered from the FEN string derived from 
-                model predictions. Unknown/occluded squares are marked with red X.
-                """
-            },
-            {
-                "name": "FEN Output",
-                "file": "fen.jpeg",
-                "title": "Step 4: FEN Reconstruction & Integration",
-                "description": """
-                **FEN Generation:**
-                1. **Map predictions** to FEN characters:
-                   - White pieces: P, N, B, R, Q, K
-                   - Black pieces: p, n, b, r, q, k
-                   - Empty squares: counted and compressed (e.g., "3" = 3 empty)
-                   - Unknown squares: "?" (occluded/low confidence)
-                
-                2. **Build FEN string:**
-                   - Process rank-by-rank from rank 8 → rank 1
-                   - Separate ranks with "/"
-                   - Compress consecutive empty squares
-                
-                3. **Add metadata** (if needed):
-                   - Active color (w/b)
-                   - Castling rights (KQkq)
-                   - En passant target
-                   - Halfmove/fullmove counters
-                
-                **Integration:**
-                This complete pipeline can be integrated into:
-                - Chess analysis tools
-                - Game digitization systems
-                - Live streaming overlays
-                - Tournament recording systems
-                
-                **Example FEN:** `rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR`
-                
-                **Final Output:** The reconstructed board can be imported directly into 
-                chess engines (Stockfish, Lichess, Chess.com) for analysis and play.
-                """
-            }
-        ]
+                """)
         
-        # Progress bar
-        progress = (st.session_state.demo_step + 1) / len(steps)
-        st.progress(progress)
+        # Step 2: Preprocessing
+        with st.expander("**🔄 Step 2: Preprocessing Pipeline**"):
+            preprocessing_path = full_demo_dir / "preprocessing.jpeg"
+            if preprocessing_path.exists():
+                st.image(str(preprocessing_path), caption="64 Extracted 3×3 Blocks", width=700)
+            else:
+                st.error("Image not found: preprocessing.jpeg")
+            
+            st.markdown("""
+            **Process:**
+            1. **Board Detection** → Find chessboard corners
+            2. **Perspective Warp** → Transform to 512×512 top-down view
+            3. **3×3 Block Extraction** → Extract 64 blocks (192×192 pixels each)
+            
+            **Output:** 64 blocks ready for classification
+            """)
         
-        # Step indicator
-        step_cols = st.columns(len(steps))
-        for i, step in enumerate(steps):
-            with step_cols[i]:
-                if i == st.session_state.demo_step:
-                    st.markdown(f"**→ {step['name']}**")
-                elif i < st.session_state.demo_step:
-                    st.markdown(f"✓ {step['name']}")
-                else:
-                    st.markdown(f"○ {step['name']}")
-        
-        st.markdown("---")
-        
-        # Current step content
-        current_step = steps[st.session_state.demo_step]
-        
-        st.markdown(f"### {current_step['title']}")
-        
-        # Display based on step (some steps show 2 images)
-        if current_step['name'] in ["Classification", "FEN Output"]:
-            # For classification and output steps, show 2 images side by side
-            st.markdown(current_step['description'])
+        # Step 3: Classification & Output (combined)
+        with st.expander("**🧠 Step 3: Model Classification & FEN Output**"):
+            st.markdown("""
+            **ResNet18 Classification:**
+            - 13 classes (12 pieces + empty)
+            - 92.5% validation accuracy
+            
+            **OOD Detection:**
+            - Confidence threshold: 0.50
+            - Low confidence → "?" (unknown)
+            - Red X marks uncertain squares
+            """)
             
             st.markdown("---")
-            st.markdown("#### Outputs")
+            st.markdown("#### Model Outputs:")
             
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("**Reconstructed Board**")
-                output_dir = Path(__file__).parent / "output"
-                board_path = output_dir / "board.jpeg"
-                
-                if board_path.exists():
-                    image = Image.open(board_path)
-                    st.image(image, width=400)
-                else:
-                    st.info("Board visualization")
-            
-            with col2:
-                st.markdown("**Classified Squares (8×8 Grid)**")
-                fen_path = output_dir / "fen.jpeg"
-                
-                if fen_path.exists():
-                    image = Image.open(fen_path)
-                    st.image(image, width=400)
-                else:
-                    st.info("Grid visualization")
-        else:
-            # For other steps, show single image on left, description on right
-            col1, col2 = st.columns([2, 3])
+            col1, col2 = st.columns([1, 1])
             
             with col1:
-                # Load and display image (smaller)
-                output_dir = Path(__file__).parent / "output"
-                image_path = output_dir / current_step['file']
-                
-                if image_path.exists():
-                    image = Image.open(image_path)
-                    st.image(image, width=400)  # Fixed width instead of full container
+                st.markdown("**With OOD Detection (Uncertain squares marked):**")
+                fen_dirty_path = full_demo_dir / "fen_dirty.jpeg"
+                if fen_dirty_path.exists():
+                    st.image(str(fen_dirty_path), caption="Red X = Low Confidence", width=400)
                 else:
-                    st.error(f"Image not found: {current_step['file']}")
-                    st.info(f"Expected path: {image_path}")
+                    st.error("Image not found: fen_dirty.jpeg")
+                
+                # Show FEN with unknowns
+                fen_dirty_txt = full_demo_dir / "fen.txt"
+                if fen_dirty_txt.exists():
+                    fen_dirty = fen_dirty_txt.read_text().strip()
+                    st.code(fen_dirty, language="text")
+                    st.caption("FEN with '?' for uncertain predictions")
             
             with col2:
-                st.markdown(current_step['description'])
-        
-        st.markdown("---")
-        
-        # Navigation buttons
-        col1, col2, col3 = st.columns([1, 2, 1])
-        
-        with col1:
-            if st.session_state.demo_step > 0:
-                if st.button("← Previous", use_container_width=True):
-                    st.session_state.demo_step -= 1
-                    st.rerun()
-        
-        with col2:
-            if st.button("🔄 Reset to Start", use_container_width=True):
-                st.session_state.demo_step = 0
-                st.rerun()
-        
-        with col3:
-            if st.session_state.demo_step < len(steps) - 1:
-                if st.button("Next →", use_container_width=True, type="primary"):
-                    st.session_state.demo_step += 1
-                    st.rerun()
-            else:
-                st.success("✓ Demo Complete!")
-        
-        # Quick jump
-        st.markdown("---")
-        st.markdown("**Quick Jump:**")
-        jump_cols = st.columns(len(steps))
-        for i, step in enumerate(steps):
-            with jump_cols[i]:
-                if st.button(f"{i+1}. {step['name']}", key=f"jump_{i}", use_container_width=True):
-                    st.session_state.demo_step = i
-                    st.rerun()
-        
-        # Live Inference Section
-        st.markdown("---")
-        st.markdown("### 🚀 Try Live Inference")
-        
-        st.markdown("""
-        Upload your own chessboard image and run the complete pipeline with a trained model!
-        """)
-        
-        col1, col2 = st.columns([2, 1])
-        
-        with col1:
-            uploaded_file = st.file_uploader(
-                "Upload Chessboard Image", 
-                type=['jpg', 'jpeg', 'png'],
-                key="live_inference_upload"
-            )
-        
-        with col2:
-            model_path = st.text_input(
-                "Model Path (optional)",
-                value="model/resnet18_ft_blocks_black.pth",
-                help="Path to trained model checkpoint"
-            )
-            threshold = st.slider(
-                "Confidence Threshold",
-                min_value=0.5,
-                max_value=1.0,
-                value=0.50,
-                step=0.05
-            )
-        
-        if uploaded_file is not None:
-            # Save uploaded file temporarily
-            temp_dir = Path(__file__).parent / "temp"
-            temp_dir.mkdir(exist_ok=True)
-            temp_image_path = temp_dir / uploaded_file.name
+                st.markdown("**Clean Output (Final Board):**")
+                fen_clean_path = full_demo_dir / "fen_clean.jpeg"
+                if fen_clean_path.exists():
+                    st.image(str(fen_clean_path), caption="Final Reconstruction", width=400)
+                else:
+                    st.error("Image not found: fen_clean.jpeg")
+                
+                # Show clean FEN
+                fen_clean_txt = full_demo_dir / "fen_clean.txt"
+                if fen_clean_txt.exists():
+                    fen_clean = fen_clean_txt.read_text().strip()
+                    st.code(fen_clean, language="text")
+                    st.caption("Standard FEN notation")
             
-            with open(temp_image_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-            
-            if st.button("▶️ Run Complete Pipeline", type="primary", use_container_width=True):
-                with st.spinner("Processing..."):
-                    # Check if model exists
-                    model_path_obj = Path(model_path)
-                    if not model_path_obj.exists():
-                        st.warning(f"Model not found at {model_path}. Running preprocessing only.")
-                        model_path = None
-                    
-                    results = run_inference_pipeline(
-                        str(temp_image_path),
-                        model_path=model_path,
-                        threshold=threshold
-                    )
-                    
-                    if results and "error" not in results:
-                        st.success("✓ Pipeline completed successfully!")
-                        
-                        # Display results
-                        st.markdown("#### Outputs")
-                        
-                        # Show board and grid side by side
-                        result_cols = st.columns(2)
-                        
-                        with result_cols[0]:
-                            st.markdown("**Reconstructed Chessboard**")
-                            if results["board_svg"]:
-                                st.components.v1.html(results["board_svg"], height=512)
-                            else:
-                                st.info("Board visualization not available")
-                        
-                        with result_cols[1]:
-                            st.markdown("**64 Classified Squares (8×8 Grid)**")
-                            if results.get("grid") is not None:
-                                st.image(cv2.cvtColor(results["grid"], cv2.COLOR_BGR2RGB), width='stretch')
-                            else:
-                                st.info("Grid visualization not available")
-                        
-                        st.markdown("---")
-                        
-                        # FEN output
-                        if results["fen"]:
-                            st.markdown("#### FEN Notation")
-                            st.code(results["fen"], language="text")
-                            
-                            # Statistics
-                            st.markdown("#### Classification Statistics")
-                            stats_cols = st.columns(4)
-                            
-                            with stats_cols[0]:
-                                st.metric("Total Squares", "64")
-                            
-                            with stats_cols[1]:
-                                if results["labels"]:
-                                    empty_count = results["labels"].count("empty")
-                                    st.metric("Empty Squares", empty_count)
-                            
-                            with stats_cols[2]:
-                                if results["labels"]:
-                                    piece_count = sum(1 for l in results["labels"] if l not in ["empty", "unknown"])
-                                    st.metric("Pieces Detected", piece_count)
-                            
-                            with stats_cols[3]:
-                                if results["unknown_indices"]:
-                                    st.metric("Unknown/Occluded", len(results["unknown_indices"]), delta_color="inverse")
-                                else:
-                                    st.metric("Unknown/Occluded", 0)
-                            
-                            # Confidence distribution
-                            if results["confidences"]:
-                                st.markdown("#### Confidence Distribution")
-                                import pandas as pd
-                                conf_data = pd.DataFrame({
-                                    "Square": [f"{i:02d}" for i in range(64)],
-                                    "Label": results["labels"],
-                                    "Confidence": results["confidences"]
-                                })
-                                
-                                # Show low confidence squares
-                                low_conf = conf_data[conf_data["Confidence"] < threshold].sort_values("Confidence")
-                                if not low_conf.empty:
-                                    st.markdown("**Low Confidence Predictions (marked as unknown):**")
-                                    st.dataframe(low_conf, width='content')
-                                else:
-                                    st.success("All predictions above threshold!")
-                    
-                    elif results and "error" in results:
-                        st.error(f"Error: {results['error']}")
-                    else:
-                        st.error("Inference failed. Please check your model and image.")
+        
     
     # Tab 5: Live Demo (Consolidated)
     with tab5:
@@ -1867,7 +1673,7 @@ run_pipeline(
                 h, w = st.session_state.original_image.shape[:2]
                 st.info(f"📐 Image Size: {w} × {h} pixels")
             else:
-                st.info("👆 Upload or select an image to begin")
+                st.info("👈 Upload or select an image to begin")
         
         # Step 2: Preprocessing
         if st.session_state.original_image is not None:
@@ -1875,7 +1681,7 @@ run_pipeline(
             st.markdown("### 🔄 Step 2: Preprocessing Pipeline")
             
             if st.button("▶️ Run Preprocessing", type="primary", key="live_demo_preprocess"):
-                with st.spinner("Detecting board and extracting squares..."):
+                with st.spinner("Detecting board and extracting 3×3 blocks..."):
                     warped_board, squares = preprocess_image(st.session_state.original_image)
                     
                     if warped_board is not None:
@@ -1894,14 +1700,14 @@ run_pipeline(
                     st.image(display_warped, width=300)
                 
                 with col2:
-                    st.markdown("**64 Extracted Squares**")
+                    st.markdown("**64 Extracted 3×3 Blocks (192×192 each)**")
                     if st.session_state.squares is not None:
                         grid_img = create_grid_image(st.session_state.squares)
                         if grid_img is not None:
                             display_grid = cv2.cvtColor(grid_img, cv2.COLOR_BGR2RGB)
                             st.image(display_grid, width=300)
                         
-                        st.success(f"✓ Extracted {len(st.session_state.squares)} squares")
+                        st.success(f"✓ Extracted {len(st.session_state.squares)} blocks (3×3 context per square)")
         
         # Step 3: Classification
         if st.session_state.squares is not None:
@@ -1957,7 +1763,9 @@ run_pipeline(
                             st.session_state.confidences = results["confidences"]
                             st.session_state.unknown_indices = results["unknown_indices"]
                             st.session_state.fen = results["fen"]
+                            st.session_state.fen_clean = results.get("fen_clean")
                             st.session_state.board_svg = results["board_svg"]
+                            st.session_state.board_svg_clean = results.get("board_svg_clean")
                             st.session_state.predictions = results.get("predictions", [])
                             
                             st.success("✓ Classification complete! See results below.")
@@ -1994,64 +1802,50 @@ run_pipeline(
             # Show board and grid side by side
             st.markdown("**Outputs:**")
             
-            output_cols = st.columns(2)
+            # Show both versions of the board
+            board_cols = st.columns(2)
             
-            with output_cols[0]:
-                st.markdown("Reconstructed Chessboard")
+            with board_cols[0]:
+                st.markdown("**With OOD Detection** (Red X = Uncertain)")
                 if st.session_state.board_svg:
-                    st.components.v1.html(st.session_state.board_svg, height=450)
+                    st.components.v1.html(st.session_state.board_svg, height=550, scrolling=False)
+                st.markdown("**FEN Notation (with OOD)**")
+                st.code(st.session_state.fen, language="text")
+                st.caption("'?' indicates low-confidence predictions")
             
-            with output_cols[1]:
-                st.markdown("64 Classified Squares (8×8 Grid)")
-                # Try to load grid from inference results
-                temp_output = Path(__file__).parent / "temp" / "inference_output"
-                grid_path = temp_output / "crops_grid.jpg"
-                if grid_path.exists():
-                    grid_img = cv2.imread(str(grid_path))
-                    if grid_img is not None:
-                        st.image(cv2.cvtColor(grid_img, cv2.COLOR_BGR2RGB), width='stretch')
-                elif st.session_state.squares is not None:
-                    # Fallback: generate grid from squares
-                    grid_img = create_grid_image(st.session_state.squares, st.session_state.labels, st.session_state.predictions)
-                    if grid_img is not None:
-                        st.image(cv2.cvtColor(grid_img, cv2.COLOR_BGR2RGB), width='stretch')
+            with board_cols[1]:
+                st.markdown("**Clean Board** (Final Output)")
+                if st.session_state.board_svg_clean:
+                    st.components.v1.html(st.session_state.board_svg_clean, height=550, scrolling=False)
+                elif st.session_state.board_svg:
+                    st.components.v1.html(st.session_state.board_svg, height=550, scrolling=False)
+                st.markdown("**FEN Notation (Clean)**")
+                if st.session_state.fen_clean:
+                    st.code(st.session_state.fen_clean, language="text")
+                    st.caption("Ready for chess engines")
+                else:
+                    st.code(st.session_state.fen, language="text")
             
             st.markdown("---")
             
-            col1, col2 = st.columns([1, 1])
+            # Show grid (smaller)
+            st.markdown("**64 Classified Blocks (8×8 Grid):**")
+            # Try to load grid from inference results
+            temp_output = Path(__file__).parent / "temp" / "inference_output"
+            grid_path = temp_output / "crops_grid.jpg"
+            if grid_path.exists():
+                grid_img = cv2.imread(str(grid_path))
+                if grid_img is not None:
+                    # Display grid at 60% width for smaller size
+                    st.image(cv2.cvtColor(grid_img, cv2.COLOR_BGR2RGB), width=800)
+            elif st.session_state.squares is not None:
+                # Fallback: generate grid from squares
+                grid_img = create_grid_image(st.session_state.squares, st.session_state.labels, st.session_state.predictions)
+                if grid_img is not None:
+                    st.image(cv2.cvtColor(grid_img, cv2.COLOR_BGR2RGB), width=800)
             
-            with col1:
-                st.markdown("**FEN Notation**")
-                st.code(st.session_state.fen, language="text")
-            
-            with col2:
-                st.markdown("**Statistics & Confidence**")
-                
-                st.markdown("""
-                **FEN Components:**
-                - White: `P N B R Q K`
-                - Black: `p n b r q k`
-                - Empty: numbers
-                - Unknown: `?`
-                """)
-                
-                # Show low confidence predictions
-                if st.session_state.confidences:
-                    import pandas as pd
-                    
-                    threshold = confidence_threshold if 'confidence_threshold' in locals() else 0.50
-                    low_conf_indices = [i for i, c in enumerate(st.session_state.confidences) if c < threshold]
-                    
-                    if low_conf_indices:
-                        st.markdown("**⚠️ Low Confidence:**")
-                        conf_data = pd.DataFrame({
-                            "Sq": [f"{i:02d}" for i in low_conf_indices],
-                            "Label": [st.session_state.labels[i] for i in low_conf_indices],
-                            "Conf": [f"{st.session_state.confidences[i]:.2%}" for i in low_conf_indices]
-                        })
-                        st.dataframe(conf_data, width='content', hide_index=True)
-                    else:
-                        st.success("✓ All predictions confident!")
+            st.markdown("---")
+        
     
     # Footer
     st.markdown("---")
