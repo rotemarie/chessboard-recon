@@ -351,12 +351,6 @@ def main():
         """)
         
         st.markdown("---")
-        st.markdown("## Key Statistics")
-        st.metric("Training Accuracy", "99.15%")
-        st.metric("Validation Accuracy", "89.08%")
-        st.metric("Board Detection Rate", "92.1%")
-        
-        st.markdown("---")
         st.markdown("## Model Architecture")
         st.markdown("""
         - **Model:** ResNet18 (fine-tuned)
@@ -374,8 +368,8 @@ def main():
         """)
     
     # Main content
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "Project Overview", "Pipeline", "Full Demo", "Live Demo"
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "Project Overview", "Work Process", "Pipeline", "Full Demo", "Live Demo"
     ])
     
     # Tab 1: Project Overview
@@ -449,211 +443,809 @@ def main():
             **[github.com/rotemarie/chessboard-recon](https://github.com/rotemarie/chessboard-recon)**
             """)
     
-    # Tab 2: Pipeline (with nested tabs)
+    # Tab 2: Work Process (with nested tabs for challenges)
     with tab2:
-        st.markdown('<div class="sub-header">Complete Processing Pipeline</div>', 
+        st.markdown('<div class="sub-header">Development Process & Challenges</div>', 
                     unsafe_allow_html=True)
         
-        # Create nested tabs for pipeline stages
-        pipeline_tab1, pipeline_tab2, pipeline_tab3 = st.tabs([
-            "🔄 Preprocessing", "🧠 Training & OOD", "🔗 Integration"
+        # Create nested tabs for challenges
+        challenge_tab1, challenge_tab2, challenge_tab3, challenge_tab4 = st.tabs([
+            "⚖️ Challenge 1: Imbalanced Dataset", 
+            "🤖 Challenge 2: Model Selection", 
+            "🔄 Challenge 3: Preprocessing Methods",
+            "🎯 Challenge 4: OOD Detection"
         ])
         
-        # Nested Tab 1: Preprocessing
-        with pipeline_tab1:
-            st.markdown("### Data Collection and Preprocessing")
+        # Challenge 1: Imbalanced Dataset
+        with challenge_tab1:
+            st.markdown("### Challenge 1: Dealing with Imbalanced Dataset")
             
             st.markdown("---")
             
-            # Section 1: Data Collection
-            st.markdown("#### 1. Data Collection and Organization")
-        
+            # Problem Statement
+            st.markdown("#### The Problem")
+            
             col1, col2 = st.columns([3, 2])
+            
             with col1:
                 st.markdown("""
-                **Input Data:**
-                - 5 chess games with labeled frames (games 2, 4-7)
-                - Each frame has a corresponding FEN notation
-                - Images captured at various game stages
-                - Total: 517 labeled frames
+                Our dataset exhibits severe class imbalance:
                 
-                **Data Format:**
-                - CSV files with frame numbers and FEN strings
-                - JPEG images (480×480 or similar)
+                - **Enormous amount of empty cell images** (~69% of dataset)
+                - **Large amount of pawn images** (~16% of dataset)
+                - **Tiny amount of queen images** (<2% of dataset)
+                
+                **Impact on Training:**
+                - The loss function doesn't represent model performance
+                - A naive "empty" predictor would reach **75% train accuracy** and **55% validation accuracy**
+                - The model tends to **overpredict 'empty' and 'pawn'**
+                - The model tends to **underpredict 'queen'** and other rare pieces
                 """)
             
             with col2:
-                st.code("""
-from_frame,to_frame,fen
-200,200,rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR
-588,588,rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR
-...
-                """, language="csv")
+                st.warning("""
+                **Why is this a problem?**
+                
+                Standard cross-entropy loss treats all classes equally. 
+                With imbalanced data, the model learns to predict frequent classes 
+                (empty, pawn) more often, achieving good loss but poor per-class accuracy.
+                
+                This is especially problematic for chess:
+                - Missing a queen is much more critical than missing a pawn
+                - Empty square classification is important but shouldn't dominate
+                """)
             
             st.markdown("---")
             
-            # Section 2: Preprocessing Methods
-            st.markdown("#### 2. Preprocessing Methods Explored")
+            # Visualizations
+            st.markdown("#### Dataset Distribution Analysis")
+            
+            viz_col1, viz_col2 = st.columns(2)
+            
+            with viz_col1:
+                dist_path = Path(__file__).parent / "for_ui" / "unbalanced" / "dist_train_vs_val.png"
+                if dist_path.exists():
+                    st.image(str(dist_path), 
+                             caption="Distribution: Train vs Validation", 
+                             width='stretch')
+                else:
+                    st.error("Image not found: dist_train_vs_val.png")
+            
+            with viz_col2:
+                hist_path = Path(__file__).parent / "for_ui" / "unbalanced" / "hist vs val.png"
+                if hist_path.exists():
+                    st.image(str(hist_path), 
+                             caption="Histogram: Train vs Validation", 
+                             width='stretch')
+                else:
+                    st.error("Image not found: hist vs val.png")
+            
+            st.markdown("---")
+            
+            # Solutions
+            st.markdown("#### Solutions We Explored")
+            
+            sol_col1, sol_col2, sol_col3 = st.columns(3)
+            
+            with sol_col1:
+                st.markdown("##### 1️⃣ Undersampling")
+                st.markdown("""
+                **Approach:**
+                Even out the number of samples for each class to match the minority class.
+                
+                **Pros:**
+                - Simple to implement
+                - Balanced training batches
+                - No bias towards majority classes
+                
+                **Cons:**
+                - ❌ **Expensive data lost** (throw away ~80% of data!)
+                - Reduced effective dataset size
+                - May underfit due to limited data
+                """)
+            
+            with sol_col2:
+                st.markdown("##### 2️⃣ Weighted Cross-Entropy Loss")
+                st.markdown("""
+                **Approach:**
+                Assign higher weights to minority classes in the loss function:
+                """)
+                
+                st.latex(r"\ell_n = -\sum_{c=1}^{C} w_c \log \frac{\exp(x_{n,c})}{\sum_{i=1}^{C} \exp(x_{n,i})}")
+                
+                st.markdown("""
+                **Pros:**
+                - Uses all available data
+                - Mathematically principled
+                
+                **Cons:**
+                - ❌ **Val set and training set differ in distribution**
+                - Requires defining two different losses (train vs val)
+                - Complicates training pipeline
+                """)
+            
+            with sol_col3:
+                st.markdown("##### 3️⃣ Weighted Sampler ✓")
+                st.markdown("""
+                **Approach:**
+                Assign sampling probability to each image. We chose:
+                
+                **P(image) = 1 / (number of images in its class)**
+                
+                This ensures equal probability for each class to be drawn.
+                
+                **Pros:**
+                - ✓ **Simple to implement**
+                - ✓ **Utilizes all data available**
+                - ✓ **No different loss functions needed**
+                
+                **Cons:**
+                - Some images may never be seen in an epoch
+                - Evaluation becomes not fully reproducible
+                """)
+            
+            st.success("""
+            **✓ Final Choice: Weighted Sampler**
+            
+            We chose weighted sampling because it's simple, utilizes all available data, 
+            and doesn't require different loss functions for validation and test sets.
+            """)
+            
+            st.markdown("---")
+            
+            # Results
+            st.markdown("#### Impact of Weighted Sampling")
             
             st.markdown("""
-            We experimented with multiple preprocessing approaches to find the optimal method for square extraction:
+            Below is a comparison of batch composition **before** and **after** applying weighted sampling:
+            """)
+            
+            batch_path = Path(__file__).parent / "for_ui" / "chosen1" / "mean_batch_count.png"
+            if batch_path.exists():
+                st.image(str(batch_path), 
+                         caption="Mean Batch Count Before and After Weighted Sampler", 
+                         width=700)
+            else:
+                st.error("Image not found: mean_batch_count.png")
+            
+            st.markdown("""
+            **Observations:**
+            - Before: Batches heavily dominated by empty squares and pawns
+            - After: All classes represented more equally in each batch
+            - This leads to better per-class accuracy, especially for rare pieces (queens, kings, knights)
+            """)
+        
+        # Challenge 2: Model Selection
+        with challenge_tab2:
+            st.markdown("### Challenge 2: Selecting the Right Model Architecture")
+            
+            st.markdown("---")
+            
+            st.markdown("#### Exploring Different Architectures")
+            
+            st.markdown("""
+            After addressing the class imbalance issue, we needed to select an appropriate model architecture. 
+            We experimented with several popular CNN architectures, testing both **transfer learning** 
+            (freezing backbone, training only final layer) and **fine-tuning** (training all layers) approaches.
+            """)
+            
+            st.info("""
+            **Important Note:** The validation set at this point in time was "dirty" - meaning it consisted 
+            of both occluded and clean images. However, the portion of occluded images in both training and 
+            validation sets is minimal, so the decision on which model to use is still logical and valid.
+            """)
+            
+            st.markdown("---")
+            
+            # Show models comparison
+            st.markdown("#### Model Comparison Results")
+            
+            models_path = Path(__file__).parent / "for_ui" / "models.png"
+            if models_path.exists():
+                st.image(str(models_path), 
+                         caption="Comparison of Different Model Architectures and Training Strategies", 
+                         width=800)
+            else:
+                st.error("Image not found: models.png")
+            
+            st.markdown("---")
+            
+            # Analysis
+            col1, col2 = st.columns([2, 3])
+            
+            with col1:
+                st.markdown("#### Key Findings")
+                st.markdown("""
+                **Best Performance:**
+                - **ResNet18 (fine-tuned):** 89.78% validation accuracy
+                - 11.7 million parameters
+                - Good convergence
+                - Reasonable training time
+                
+                **Other Results:**
+                - ResNet18 (transfer learning): 62.98%
+                - ResNet50 (fine-tuned): 86.83%
+                - VGG16 (transfer learning): 77.63%
+                """)
+            
+            with col2:
+                st.markdown("#### Analysis & Decision")
+                st.markdown("""
+                **Why Fine-tuning outperformed Transfer Learning?**
+                
+                Chess piece classification is quite different from ImageNet's general object recognition:
+                - Pieces have unique shapes and textures
+                - Background (chessboard) is domain-specific
+                - Fine-grained classification needed (bishop vs pawn)
+                
+                Fine-tuning allows the model to adapt all layers to the chess domain, 
+                while transfer learning only trains the final classifier.
+                
+                **Why ResNet18 over ResNet50?**
+                - Better accuracy (89.78% vs 86.83%)
+                - Fewer parameters (11.7M vs 25.6M)
+                - Faster training and inference
+                - Less prone to overfitting on our dataset size
+                """)
+            
+            st.success("""
+            **✓ Final Choice: ResNet18 (Fine-tuned)**
+            
+            Sweet 89% is a good result! But can we improve it further? 
+            
+            → This question led us to Challenge 3: investigating preprocessing methods...
+            """)
+        
+        # Challenge 3: Preprocessing Methods (updated content)
+        with challenge_tab3:
+            st.markdown("### Challenge 3: Improving Preprocessing to Boost Accuracy")
+            
+            st.markdown("---")
+            
+            st.markdown("#### Initial Approach: Board Detection & Square Cropping")
+            
+            col1, col2 = st.columns([3, 2])
+            
+            with col1:
+                st.markdown("""
+                **Our initial preprocessing pipeline:**
+                
+                1. **Board Detection** - Locate the chessboard in the image using edge detection
+                2. **Perspective Warp** - Transform to perfect top-down 512×512 view
+                3. **Square Extraction** - Crop the board into exactly 64 squares (64×64 pixels each)
+                4. **Individual Tagging** - Each square labeled with its piece type from FEN
+                
+                This seemed straightforward, but we encountered a significant problem...
+                """)
+            
+            with col2:
+                # Show demo preprocessing image (the one used in the demo)
+                demo_preprocess_path = Path(__file__).parent / "output" / "processed.jpeg"
+                if demo_preprocess_path.exists():
+                    st.image(str(demo_preprocess_path), 
+                             caption="Initial Preprocessing: Board Detection & Square Extraction",
+                             width=300)
+            
+            st.markdown("---")
+            
+            # The Problem
+            st.markdown("#### The Problem: Tall Pieces Get Cut Off")
+            
+            st.markdown("""
+            The angle at which images were taken and the exact square cropping **cut off "tall" pieces** 
+            like queens, kings, and bishops. The model couldn't see the distinctive tops of these pieces!
+            """)
+            
+            # Show confusion matrix for original method
+            conf_col1, conf_col2 = st.columns([1, 1])
+            
+            with conf_col1:
+                st.markdown("**Original Method Confusion Matrix:**")
+                regular_conf_path = Path(__file__).parent / "for_ui" / "regular_confusion_mtx.png"
+                if regular_conf_path.exists():
+                    st.image(str(regular_conf_path), 
+                             caption="Poor Performance on Queen, King, Bishop",
+                             width='stretch')
+                else:
+                    st.error("Image not found: regular_confusion_mtx.png")
+                
+                st.warning("""
+                **Worst Performances:**
+                - Queen: 54% accuracy
+                - King: Multiple confusions
+                - Bishop: 83% accuracy
+                
+                These are exactly the tall pieces!
+                """)
+            
+            with conf_col2:
+                st.markdown("**What the Model Sees:**")
+                error_examples_path = Path(__file__).parent / "for_ui" / "error examples.png"
+                if error_examples_path.exists():
+                    st.image(str(error_examples_path), 
+                             caption="Error Examples: Pieces Cut Off at Top",
+                             width='stretch')
+                else:
+                    st.error("Image not found: error examples.png")
+                
+                st.markdown("""
+                **Example 1:** Black king predicted as black queen - the distinctive cross on top is cut off!
+                
+                **Example 2:** Black bishop predicted as black queen - only seeing the rounded base, not the pointed top.
+                """)
+            
+            st.markdown("---")
+            
+            # Solutions Attempted
+            st.markdown("#### Solutions Attempted")
+            
+            st.markdown("""
+            **Approach:** Instead of cropping strictly the tile area, allow some **buffer space** 
+            so more of the figure remains visible.
+            
+            **Danger:** This also introduces more of neighboring figures into the frame and may 
+            cause the model to classify them instead of the target piece.
+            
+            We experimented with different crop strategies, checking model performance on each:
             """)
             
             # Show preprocessing comparison image
             preprocessing_img_path = Path(__file__).parent / "for_ui" / "preprocessing.png"
             if preprocessing_img_path.exists():
                 st.image(str(preprocessing_img_path), 
-                         caption="Comparison of Different Preprocessing Methods", 
-                         width=700)
+                         caption="Comparison of Different Preprocessing Methods & Validation Accuracy", 
+                         width=750)
+            else:
+                st.error("Image not found: preprocessing.png")
+            
+            st.markdown("---")
             
             col1, col2, col3 = st.columns(3)
             
             with col1:
-                st.markdown("##### Original (64×64)")
+                st.markdown("##### Method 1: Original (64×64)")
                 st.markdown("""
                 **Exact square extraction**
                 - No padding
                 - 64×64 pixels per square
+                - Direct crop from warped board
                 - **Validation Accuracy: 91.46%**
                 
-                **Problem:** Pieces extending beyond square boundaries get cut off 
-                (especially tall pieces like kings and queens).
+                **Problem:** 
+                Pieces extending beyond square boundaries get cut off, especially tall pieces 
+                like kings and queens. The model loses important visual information about piece tops.
                 """)
             
             with col2:
-                st.markdown("##### 3×3 Blocks")
-                st.markdown("""
-                **3×3 square neighborhood**
-                - 192×192 pixels (3 squares)
-                - Black/mirrored padding at edges
-                - **Best Validation Accuracy: 92.51%** ✓
-                
-                **Advantage:** Provides rich spatial context. Each square sees its 
-                8 neighbors, helping distinguish similar pieces.
-                """)
-            
-            with col3:
-                st.markdown("##### Padded Squares")
+                st.markdown("##### Method 2: Padded Squares")
                 st.markdown("""
                 **Single square with padding**
                 - 64×64 base + padding (20-30%)
-                - Black border padding
+                - Black border padding at edges
+                - Captures piece tops
                 - **Validation Accuracy: 90.36% (30% padding)**
                 
-                **Advantage:** Captures piece tops without excessive context. 
-                Good balance between context and focus.
+                **Advantage:** 
+                Captures piece tops without excessive context. Good balance between 
+                capturing full piece and maintaining focus on target square.
+                
+                **Issue:** 
+                Still misses neighboring context that could help distinguish similar pieces.
+                """)
+            
+            with col3:
+                st.markdown("##### Method 3: 3×3 Blocks ✓")
+                st.markdown("""
+                **3×3 square neighborhood**
+                - 192×192 pixels (3×3 squares)
+                - Black/mirrored padding at board edges
+                - Target square centered in block
+                - **Best Validation Accuracy: 92.51%** ✓
+                
+                **Advantage:** 
+                Provides rich spatial context. Each square "sees" its 8 neighbors, helping 
+                the model distinguish similar pieces based on board position and surrounding pieces.
                 """)
             
             st.success("""
-            **Final Choice:** 3×3 Blocks with black padding achieved the best results (92.51% validation accuracy), 
-            providing optimal spatial context for piece classification.
+            **✓ Winner: 3×3 Blocks with black padding**
+            
+            Achieved the best validation accuracy: **92.51%** (up from 91.46% with original cropping!)
             """)
             
             st.markdown("---")
             
-            # Section 3: Preprocessing Pipeline
-            st.markdown("#### 3. Preprocessing Pipeline Implementation")
-        
-            col1, col2 = st.columns(2)
+            # Show 3x3 confusion matrix
+            st.markdown("#### Results: 3×3 Block Confusion Matrix")
             
-            with col1:
-                st.markdown("**A. Board Detection**")
-                st.markdown("""
-                **Primary Method:** Edge Detection
-                1. Convert to grayscale
-                2. Gaussian blur (σ=5)
-                3. Canny edge detection (50, 150)
-                4. Find contours, filter for quadrilaterals
-                5. Select largest contour (>20% of image)
-                
-                **Fallback Method:** Adaptive Thresholding
-                - Used when edge detection fails
-                - Morphological operations
-                - Bounding box estimation
-                
-                **Success Rate:** 92.1% across all games
-                """)
-                
-                st.markdown("**B. Perspective Transformation**")
-                st.markdown("""
-                1. **Order corners** consistently (TL, TR, BR, BL)
-                2. **Apply homography** to map to 512×512 square
-                3. **Result:** Perfect top-down view
-                """)
+            result_col1, result_col2 = st.columns([3, 2])
             
-            with col2:
-                st.markdown("**C. 3×3 Block Extraction**")
-                st.markdown("""
-                1. **Pad board** with 64px black border on all sides
-                2. **For each square** (64 total):
-                   - Extract 3×3 neighborhood (192×192 pixels)
-                   - Center the target square
-                   - Include surrounding context
-                3. **Order** following FEN convention (a8 → h1)
+            with result_col1:
+                conf_33_path = Path(__file__).parent / "for_ui" / "33_confusion_mtx.png"
+                if conf_33_path.exists():
+                    st.image(str(conf_33_path), 
+                             caption="3×3 Blocks Confusion Matrix - Significant Improvements",
+                             width='stretch')
+                else:
+                    st.error("Image not found: 33_confusion_mtx.png")
+            
+            with result_col2:
+                st.info("""
+                **Why 3×3 Blocks Work Better:**
                 
-                **Output:** 64 blocks of 192×192 pixels each
-                """)
+                ✓ **Captures full pieces** - including tops of tall pieces (queens, kings, bishops)
                 
-                st.markdown("**D. FEN Parsing and Labeling**")
-                st.markdown("""
-                1. **Parse** FEN string to 64 labels
-                2. **Map** each character to piece class
-                3. **Expand** numbers (e.g., '8' → 8 empty squares)
-                4. **Validate** total count = 64
+                ✓ **Provides spatial context** - model sees neighboring squares to better distinguish similar pieces
                 
-                **Classes:** 13 total (12 pieces + empty)
+                ✓ **Understands position** - can use board location and surrounding pieces as additional features
+                
+                ✓ **Clean edge handling** - black padding at board edges avoids artifacts from mirroring/stretching
                 """)
             
             st.markdown("---")
             
-            # Section 4: Dataset Preparation
-            st.markdown("#### 4. Dataset Preparation")
+            # New Problem: Shading
+            st.markdown("#### Remaining Challenge: Black Queen vs Black Bishop Confusion")
+            
+            st.markdown("""
+            While 3×3 blocks solved the problem of cut-off pieces, a new issue emerged: 
+            **black queens are now confused with black bishops**.
+            """)
+            
+            # Show queen vs bishop confusion
+            queen_bishop_col1, queen_bishop_col2 = st.columns([2, 3])
+            
+            with queen_bishop_col1:
+                queen_bishop_path = Path(__file__).parent / "for_ui" / "queen_v_bishop.png"
+                if queen_bishop_path.exists():
+                    st.image(str(queen_bishop_path), 
+                             caption="Black Queen Confused with Black Bishop",
+                             width='stretch')
+                else:
+                    st.error("Image not found: queen_v_bishop.png")
+            
+            with queen_bishop_col2:
+                st.markdown("""
+                **The Black Queen is now fully visible** (no longer cut off), and the model no longer 
+                confuses it with the black king. However, a new confusion emerged: 
+                **black queen ↔ black bishop**.
+                
+                Why is this happening when white pieces don't have the same issue?
+                """)
+            
+            st.markdown("---")
+            
+            # Explanation: Shading Differences
+            st.markdown("#### The Root Cause: Shading and Contrast")
+            
+            shading_col1, shading_col2 = st.columns([3, 2])
+            
+            with shading_col1:
+                confusing_pieces_path = Path(__file__).parent / "for_ui" / "confusing_pieces.png"
+                if confusing_pieces_path.exists():
+                    st.image(str(confusing_pieces_path), 
+                             caption="Comparison: White vs Black Pieces - Shading Visibility",
+                             width='stretch')
+                else:
+                    st.error("Image not found: confusing_pieces.png")
+            
+            with shading_col2:
+                st.markdown("""
+                **White Pieces:**
+                - Clear shadows and shading visible
+                - Strong shape cues from internal contours
+                - Distinct edges and boundaries
+                
+                **Black Pieces:**
+                - Shadows barely visible (dark on dark)
+                - Light reflections/blinks replace shadows
+                - Weaker contours and edges
+                
+                → Black pieces are **darker + lower-contrast**, 
+                so the model loses critical shape cues.
+                """)
+            
+            st.markdown("---")
+            
+            # Solution Attempt: Contrast Enhancement
+            st.markdown("#### Attempted Solution: Contrast Enhancement")
+            
+            st.markdown("""
+            We attempted to make the model pay more attention to **figure contours** and **light traces** 
+            by increasing image contrast using several techniques:
+            
+            - **Gamma correction** - Brighten dark objects without blowing out highlights
+            - **CLAHE (Contrast Limited Adaptive Histogram Equalization)** - Local contrast boost on luminance channel
+            - **Unsharp masking** - Mild sharpening to make borders clearer
+            """)
+            
+            # Show before/after examples
+            enhance_col1, enhance_col2 = st.columns(2)
+            
+            with enhance_col1:
+                st.markdown("**Black Pieces Enhancement:**")
+                black_shading_path = Path(__file__).parent / "for_ui" / "black_shading.png"
+                if black_shading_path.exists():
+                    st.image(str(black_shading_path), 
+                             caption="Before/After: Contrast Enhancement on Black Pieces",
+                             width='stretch')
+                else:
+                    st.error("Image not found: black_shading.png")
+            
+            with enhance_col2:
+                st.markdown("**White Pieces Enhancement:**")
+                white_shading_path = Path(__file__).parent / "for_ui" / "white_shading.png"
+                if white_shading_path.exists():
+                    st.image(str(white_shading_path), 
+                             caption="Before/After: Contrast Enhancement on White Pieces",
+                             width='stretch')
+                else:
+                    st.error("Image not found: white_shading.png")
+            
+            st.markdown("---")
+            
+            # Results
+            st.markdown("#### Results: Contrast Enhancement Did Not Help")
+            
+            result_enhance_col1, result_enhance_col2 = st.columns([3, 2])
+            
+            with result_enhance_col1:
+                shading_res_path = Path(__file__).parent / "for_ui" / "shading_training_res.png"
+                if shading_res_path.exists():
+                    st.image(str(shading_res_path), 
+                             caption="Training Results: Contrast Enhancement Actually Worsened Performance",
+                             width='stretch')
+                else:
+                    st.error("Image not found: shading_training_res.png")
+            
+            with result_enhance_col2:
+                st.warning("""
+                **Outcome:**
+                
+                The contrast enhancement approach **did not improve results**, 
+                and actually **slightly worsened** the validation accuracy.
+                
+                **Why?**
+                - The bishop and queen are genuinely similar shapes
+                - Visible contours play the main role in distinguishing them
+                - Simply enhancing contrast doesn't add the missing shape information
+                - The model needs to learn subtle differences (crown vs pointed top)
+                """)
+            
+            st.markdown("---")
+            
+            # Future Work
+            st.markdown("#### Open Problem & Possible Solutions")
+            
+            st.info("""
+            **Resolving the black bishop ↔ black queen confusion remains an open challenge.**
+            
+            Possible solutions to explore in future work:
+            
+            1. **Triplet Loss Training** - Use triplet loss to explicitly drive queen and bishop 
+               embeddings apart in the feature space
+            
+            2. **Increase Dataset Size** - More training examples may help the model learn to 
+               recognize the crown (the main visual difference between queen and bishop)
+            
+            3. **Attention Mechanisms** - Add attention layers to force the model to focus on 
+               the top of pieces where the distinctive features are located
+            
+            4. **Multi-Scale Features** - Combine features from multiple scales to capture 
+               both fine details (crown) and overall shape
+            """)
         
-            col1, col2, col3 = st.columns(3)
+        # Challenge 4: Out-of-Distribution (OOD) Detection
+        with challenge_tab4:
+            st.markdown("### Challenge 4: Detecting Occlusions (Out-of-Distribution)")
+            
+            st.markdown("---")
+            
+            st.markdown("#### The Problem: Occlusions")
+            
+            col1, col2 = st.columns([3, 2])
             
             with col1:
-                st.markdown("**Dataset Splitting**")
                 st.markdown("""
-                **Critical:** Split by **game**, not frame!
+                **Challenge:** The model should recognize when pieces are **occluded** (blocked by hands, 
+                other objects, or poor lighting).
                 
-                - **Train:** games 4, 5, 6 (74.5%)
-                - **Val:** game 7 (10.6%)
-                - **Test:** game 2 (14.9%)
-                - **Total:** 33,092 blocks
-                
-                **Why by game?**
-                Prevents data leakage - frames from the same game are highly correlated.
+                **Issue:** Occlusions are **not labeled** in the training set!
+                - We don't have ground truth for "this is occluded"
+                - Can't train a separate "occluded" class
+                - Model will try to classify occluded pieces and likely get them wrong
                 """)
             
             with col2:
-                st.markdown("**Class Balancing**")
-                st.markdown("""
-                **Problem:** Natural class imbalance
-                - Empty: ~69%
-                - Pawns: ~16%
-                - Other pieces: ~15%
+                st.warning("""
+                **Why not just label them?**
                 
-                **Solution:** Weighted random sampling
-                - Inverse frequency weights
-                - Sample with replacement
-                - Equal class representation per epoch
+                Occlusions are:
+                - Unpredictable (hands, shadows, etc.)
+                - Temporary (in video, they appear/disappear)
+                - Expensive to manually annotate
+                
+                We need an **automatic** solution.
                 """)
             
-            with col3:
-                st.markdown("**Data Augmentation**")
+            st.markdown("---")
+            
+            # Solution
+            st.markdown("#### Solution: Train on Clean, Detect via Confidence")
+            
+            st.markdown("""
+            **Our Approach:**
+            1. Train the model while **ignoring the existence of occluded images**
+            2. Occluded images add noise to training, but they're a small fraction (~1-2%) so noise impact is minimal
+            3. After training, use **confidence thresholding** to detect occlusions
+            """)
+            
+            # Show clean vs occluded confidence distribution
+            clean_vs_occ_path = Path(__file__).parent / "for_ui" / "clean_vs_occluded.png"
+            if clean_vs_occ_path.exists():
+                st.image(str(clean_vs_occ_path), 
+                         caption="Confidence Distribution: Clean vs Occluded Images", 
+                         width=600)
+            else:
+                st.error("Image not found: clean_vs_occluded.png")
+            
+            st.markdown("---")
+            
+            # Key Insight
+            st.markdown("#### Key Insight: Confidence Separation")
+            
+            insight_col1, insight_col2 = st.columns([2, 3])
+            
+            with insight_col1:
                 st.markdown("""
-                **Training augmentation:**
-                - Random horizontal flips
-                - Random vertical flips
-                - Resize to 224×224
-                - ImageNet normalization
+                **Observation:**
                 
-                **Validation/Test:**
-                - No augmentation
-                - Resize + normalize only
+                After training, we noticed the model tends to assign labels to occluded images 
+                with **much lower confidence** than clean images.
+                
+                **Solution:**
+                - Use a **confidence threshold**
+                - Predictions below threshold → relabel as "occluded" (unknown)
+                - Clear separation means minimal impact on correct predictions
                 """)
+            
+            with insight_col2:
+                # Show OOD graph
+                ood_graph_path = Path(__file__).parent / "for_ui" / "ood_graph.png"
+                if ood_graph_path.exists():
+                    st.image(str(ood_graph_path), 
+                             caption="Cumulative Distribution: Clear Separation Between Clean and Occluded",
+                             width='stretch')
+                else:
+                    st.error("Image not found: ood_graph.png")
+            
+            st.markdown("---")
+            
+            # Results
+            st.markdown("#### Results on Validation Set")
+            
+            result_col1, result_col2 = st.columns([3, 2])
+            
+            with result_col1:
+                ood_results_path = Path(__file__).parent / "for_ui" / "OOD.png"
+                if ood_results_path.exists():
+                    st.image(str(ood_results_path), 
+                             caption="OOD Detection Performance Metrics",
+                             width='stretch')
+                else:
+                    st.error("Image not found: OOD.png")
+            
+            with result_col2:
+                st.success("""
+                **Performance Summary:**
+                
+                ✓ **Clean images:** High confidence maintained
+                
+                ✓ **Occluded images:** Successfully detected with low confidence
+                
+                ✓ **Clear separation:** Minimal false positives (clean images marked as occluded)
+                
+                ✓ **Practical benefit:** System can flag uncertain predictions for manual review
+                """)
+                
+                st.info("""
+                **Threshold Selection:**
+                
+                We chose a threshold of **0.5** (50% confidence).
+                
+                **Reasoning:**
+                We prefer some occluded images to be missed (which are pretty rare) rather 
+                than the already poorly predicted queen class to be hurt even more.
+                
+                This conservative threshold ensures:
+                - Most clean images pass (especially queens)
+                - Very low confidence predictions flagged
+                - Minimal impact on rare piece classes
+                """)
+            
+            st.markdown("---")
+            
+            # Comparison: 3x3 vs Original
+            st.markdown("#### 3×3 Blocks vs Original Cropping")
+            
+            st.markdown("""
+            Comparing OOD detection performance between our original cropping method and the 3×3 blocks approach:
+            """)
+            
+            comparison_path = Path(__file__).parent / "for_ui" / "33_vs_og_ood.png"
+            if comparison_path.exists():
+                st.image(str(comparison_path), 
+                         caption="Comparison: 3×3 Blocks vs Original Cropping for OOD Detection", 
+                         width=800)
+            else:
+                st.error("Image not found: 33_vs_og_ood.png")
+    
+    # Tab 3: Pipeline (functionality and integration)
+    with tab3:
+        st.markdown('<div class="sub-header">Complete Processing Pipeline</div>', 
+                    unsafe_allow_html=True)
         
-        # Nested Tab 2: Training & OOD
+        # Create nested tabs for pipeline functionality
+        pipeline_tab1, pipeline_tab2, pipeline_tab3 = st.tabs([
+            "🔄 Preprocessing Pipeline", "🧠 Training & OOD Detection", "🔗 Integration & Deployment"
+        ])
+        
+        # Pipeline Tab 1: Preprocessing Pipeline
+        with pipeline_tab1:
+            st.markdown("### Preprocessing Pipeline Implementation")
+            
+            st.markdown("---")
+            
+            st.markdown("#### Technical Implementation: 3×3 Block Extraction")
+        
+            impl_col1, impl_col2 = st.columns(2)
+            
+            with impl_col1:
+                st.markdown("**Step-by-Step Process:**")
+                st.markdown("""
+                1. **Board Detection** - Locate the chessboard in the image using edge detection
+                2. **Perspective Warp** - Transform to perfect top-down 512×512 view
+                3. **Padding** - Add 64px black border on all sides (total: 640×640)
+                4. **Block Extraction**
+                   - For each of 64 squares:
+                     - Extract 3×3 neighborhood (192×192 pixels)
+                     - Center on target square
+                     - Include 8 surrounding squares
+                5. **Labeling**
+                   - Parse FEN notation
+                   - Assign labels (13 classes)
+                   - Validate 64 total squares
+                """)
+            
+            with impl_col2:
+                st.markdown("**Key Benefits:**")
+                st.markdown("""
+                ✓ **Spatial Context:**
+                - Model sees neighboring pieces
+                - Better distinguishes similar pieces
+                - Understands board position
+                
+                ✓ **Complete Piece Coverage:**
+                - Captures tall pieces fully
+                - No cropping at boundaries
+                - Consistent input size
+                
+                ✓ **Edge Handling:**
+                - Black padding at board edges
+                - No distortion or artifacts
+                - Natural appearance
+                """)
+                
+                st.code("""
+# Block extraction parameters
+Board size: 512×512 pixels
+Square size: 64×64 pixels
+Padding: 64 pixels (black)
+Block size: 192×192 pixels (3×3 squares)
+Total blocks: 64 (one per square)
+                """, language="python")
+        
+        # Pipeline Tab 2: Training & OOD
         with pipeline_tab2:
             st.markdown("### Model Training and OOD Detection")
             
@@ -756,7 +1348,7 @@ Training time: ~2-3 hours (GPU)
                 - User can manually verify ambiguous squares
                 """)
         
-        # Nested Tab 3: Integration
+        # Pipeline Tab 3: Integration
         with pipeline_tab3:
             st.markdown("### Board Reconstruction and Integration")
             
@@ -876,9 +1468,8 @@ run_pipeline(
                 - Chess rule validation (legal moves)
                 """)
     
-    # Tab 3: Input (renamed)    
-    # Tab 3: Full Demo (Interactive Walkthrough)
-    with tab3:
+    # Tab 4: Full Demo (Interactive Walkthrough)
+    with tab4:
         st.markdown('<div class="sub-header">Complete Pipeline Walkthrough</div>', 
                     unsafe_allow_html=True)
         
@@ -1235,8 +1826,8 @@ run_pipeline(
                     else:
                         st.error("Inference failed. Please check your model and image.")
     
-    # Tab 4: Live Demo (Consolidated)
-    with tab4:
+    # Tab 5: Live Demo (Consolidated)
+    with tab5:
         st.markdown('<div class="sub-header">Live Inference Demo</div>', 
                     unsafe_allow_html=True)
         
