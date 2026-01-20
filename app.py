@@ -138,6 +138,26 @@ def init_session_state():
         st.session_state.unknown_indices = None
 
 
+def add_back_to_top():
+    """Add a back to top button at the bottom of the page."""
+    st.markdown("---")
+    st.markdown("""
+    <div style="text-align: center; margin-top: 2rem; margin-bottom: 2rem;">
+        <a href="#chessboard-recognition-system" style="
+            display: inline-block;
+            padding: 0.75rem 2rem;
+            background-color: #2E86AB;
+            color: white;
+            text-decoration: none;
+            border-radius: 0.5rem;
+            font-weight: bold;
+        ">
+            ⬆️ Back to Top
+        </a>
+    </div>
+    """, unsafe_allow_html=True)
+
+
 def load_sample_images():
     """Load available sample images."""
     samples_dir = Path(__file__).parent / "data/per_frame/game2_per_frame/tagged_images"
@@ -344,7 +364,7 @@ def main():
         This system uses deep learning to:
         1. **Detect** chessboards in images
         2. **Warp** to top-down view
-        3. **Extract** 64 individual squares
+        3. **Extract** 64 3×3 block crops (centered on each square)
         4. **Classify** each piece (13 classes)
         5. **Detect** occlusions (OOD)
         6. **Reconstruct** board in FEN notation
@@ -394,14 +414,15 @@ def main():
             5. **Reconstruct** the complete board state in FEN notation
             """)
             
-            st.markdown("## Key Challenges")
-            st.markdown("""
-            - **Arbitrary camera angles** - boards photographed from various perspectives
-            - **Varying lighting conditions** - shadows, highlights, different environments
-            - **Occlusions** - hands, other pieces, or objects blocking the view
-            - **Piece similarity** - distinguishing between similar pieces (e.g., bishop vs pawn)
-            - **No temporal information** - single static images only (no video context)
-            """)
+            st.markdown("## System Architecture")
+            
+            architecture_path = Path(__file__).parent / "architecture.jpeg"
+            if architecture_path.exists():
+                st.image(str(architecture_path), 
+                         caption="Complete Pipeline Architecture", 
+                         width=700)
+            else:
+                st.error("Image not found: architecture.jpeg")
         
         with col2:
             st.markdown("## Our Solution")
@@ -442,6 +463,9 @@ def main():
             
             **[github.com/rotemarie/chessboard-recon](https://github.com/rotemarie/chessboard-recon)**
             """)
+        
+        # Add back to top button
+        add_back_to_top()
     
     # Tab 2: Work Process (with nested tabs for challenges)
     with tab2:
@@ -613,6 +637,36 @@ def main():
             - Before: Batches heavily dominated by empty squares and pawns
             - After: All classes represented more equally in each batch
             - This leads to better per-class accuracy, especially for rare pieces (queens, kings, knights)
+            """)
+            
+            st.markdown("---")
+            
+            # Balanced vs Imbalanced Comparison
+            st.markdown("#### Balanced Dataset vs Imbalanced Dataset")
+            
+            st.markdown("""
+            To validate our approach, we compared training with a balanced dataset versus the original imbalanced dataset:
+            
+            - **Balanced model:** Trained with balanced training set and hyperparameters tuned on balanced validation set
+            - **Imbalanced model:** Trained with imbalanced training set and hyperparameters tuned on imbalanced validation set
+            
+            Both models used the original tile cropping method (64×64 squares).
+            """)
+            
+            balanced_path = Path(__file__).parent / "for_ui" / "balanced_v_unbalanced.png"
+            if balanced_path.exists():
+                st.image(str(balanced_path), 
+                         caption="Comparison: Balanced vs Imbalanced Training", 
+                         width=700)
+            else:
+                st.error("Image not found: balanced_v_unbalanced.png")
+            
+            st.info("""
+            **Key Findings:**
+            - Balanced model shows better validation accuracy
+            - However, on a balanced clean test set, the balanced model performs better
+            - On an imbalanced clean test set (closer to real-world distribution), both perform similarly
+            - This validates our weighted sampler approach for handling class imbalance
             """)
         
         # Challenge 2: Model Selection
@@ -1071,11 +1125,11 @@ def main():
             st.markdown("---")
             
             # Solution
-            st.markdown("#### Solution: Train on Clean, Detect via Confidence")
+            st.markdown("#### Solution: Train on Dirty Data, Detect via Confidence")
             
             st.markdown("""
             **Our Approach:**
-            1. Train the model while **ignoring the existence of occluded images**
+            1. Train the model on **dirty data** (includes occluded images)
             2. Occluded images add noise to training, but they're a small fraction (~1-2%) so noise impact is minimal
             3. After training, use **confidence thresholding** to detect occlusions
             """)
@@ -1179,6 +1233,9 @@ def main():
                          width=800)
             else:
                 st.error("Image not found: 33_vs_og_ood.png")
+        
+        # Add back to top button
+        add_back_to_top()
     
     # Tab 3: Pipeline (functionality and integration)
     with tab3:
@@ -1467,6 +1524,9 @@ run_pipeline(
                 - Mobile deployment
                 - Chess rule validation (legal moves)
                 """)
+        
+        # Add back to top button
+        add_back_to_top()
     
     # Tab 4: Full Demo (Interactive Walkthrough)
     with tab4:
@@ -1486,7 +1546,7 @@ run_pipeline(
         steps = [
             {
                 "name": "Input",
-                "file": "preprocessed.jpeg",
+                "file": "og.jpeg",
                 "title": "Step 1: Input Image",
                 "description": """
                 **Input:** Raw photo of a physical chessboard taken from an arbitrary angle.
@@ -1503,7 +1563,7 @@ run_pipeline(
             },
             {
                 "name": "Preprocessing",
-                "file": "processed.jpeg",
+                "file": "preprocessing.jpeg",
                 "title": "Step 2: Preprocessing Pipeline",
                 "description": """
                 **Board Localization & Warping:**
@@ -1527,7 +1587,7 @@ run_pipeline(
             },
             {
                 "name": "Classification",
-                "file": "board.jpeg",
+                "file": "fen_dirty.jpeg",
                 "title": "Step 3: Model Classification",
                 "description": """
                 **Model Architecture:**
@@ -1541,11 +1601,11 @@ run_pipeline(
                 - **Augmentation:** Random rotation, brightness, contrast
                 - **Loss:** Cross-entropy with weighted sampling for class balance
                 - **Optimizer:** Adam with learning rate scheduling
-                - **Accuracy:** 89.08% overall, 95.2% on empty squares
+                - **Accuracy:** 92.5% overall
                 
                 **OOD Detection (Out-of-Distribution):**
                 - **Method:** Maximum Softmax Probability (MSP)
-                - **Threshold:** 0.80 (confidence below → "unknown")
+                - **Threshold:** 0.50 (confidence below → "unknown")
                 - **Purpose:** Detect occluded/uncertain squares
                 - **Result:** 85.4% true positive rate on occluded squares
                 
@@ -1555,7 +1615,7 @@ run_pipeline(
             },
             {
                 "name": "FEN Output",
-                "file": "fen.jpeg",
+                "file": "fen_clean.jpeg",
                 "title": "Step 4: FEN Reconstruction & Integration",
                 "description": """
                 **FEN Generation:**
@@ -1625,8 +1685,8 @@ run_pipeline(
             
             with col1:
                 st.markdown("**Reconstructed Board**")
-                output_dir = Path(__file__).parent / "output"
-                board_path = output_dir / "board.jpeg"
+                output_dir = Path(__file__).parent / "full_demo"
+                board_path = output_dir / "fen_dirty.jpeg"
                 
                 if board_path.exists():
                     image = Image.open(board_path)
@@ -1636,7 +1696,7 @@ run_pipeline(
             
             with col2:
                 st.markdown("**Classified Squares (8×8 Grid)**")
-                fen_path = output_dir / "fen.jpeg"
+                fen_path = output_dir / "fen_clean.jpeg"
                 
                 if fen_path.exists():
                     image = Image.open(fen_path)
@@ -1649,7 +1709,7 @@ run_pipeline(
             
             with col1:
                 # Load and display image (smaller)
-                output_dir = Path(__file__).parent / "output"
+                output_dir = Path(__file__).parent / "full_demo"
                 image_path = output_dir / current_step['file']
                 
                 if image_path.exists():
@@ -1825,6 +1885,9 @@ run_pipeline(
                         st.error(f"Error: {results['error']}")
                     else:
                         st.error("Inference failed. Please check your model and image.")
+        
+        # Add back to top button
+        add_back_to_top()
     
     # Tab 5: Live Demo (Consolidated)
     with tab5:
@@ -2052,6 +2115,9 @@ run_pipeline(
                         st.dataframe(conf_data, width='content', hide_index=True)
                     else:
                         st.success("✓ All predictions confident!")
+        
+        # Add back to top button
+        add_back_to_top()
     
     # Footer
     st.markdown("---")
