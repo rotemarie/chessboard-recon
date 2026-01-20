@@ -337,7 +337,7 @@ def main():
     # Sidebar
     with st.sidebar:
         st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/ChessSet.jpg/300px-ChessSet.jpg", 
-                 use_column_width=True)
+                 width='stretch')
         
         st.markdown("## Project Overview")
         st.markdown("""
@@ -504,7 +504,7 @@ from_frame,to_frame,fen
             if preprocessing_img_path.exists():
                 st.image(str(preprocessing_img_path), 
                          caption="Comparison of Different Preprocessing Methods", 
-                         use_container_width=True)
+                         width=700)
             
             col1, col2, col3 = st.columns(3)
             
@@ -921,16 +921,17 @@ run_pipeline(
                 3. **Corner Detection:** Find the four corners of the chessboard
                 4. **Perspective Transform:** Warp to 512×512 top-down view
                 
-                **Square Extraction:**
-                1. **Grid Division:** Slice warped board into 8×8 grid
-                2. **Square Extraction:** Each square is 64×64 pixels (or 102×102 with 30% padding)
-                3. **Chess Notation:** Label each square (a1-h8)
-                4. **Padding:** 30% padding captures pieces extending beyond boundaries
+                **3×3 Block Extraction:**
+                1. **Pad Board:** Add 64px black border around the entire board
+                2. **Extract Blocks:** For each of the 64 squares, extract a 3×3 neighborhood (192×192 pixels)
+                3. **Center Target Square:** Each block is centered on its target square, including 8 surrounding squares
+                4. **Chess Notation:** Label each block by its center square (a8-h1)
                 
-                **Output:** 64 individual square images ready for classification.
+                **Output:** 64 blocks (192×192 pixels each) ready for classification.
                 
-                **Key Insight:** This visualization shows all 64 extracted squares with their 
-                chess notation labels. Padding ensures tall pieces (kings, queens) aren't cut off.
+                **Key Insight:** This visualization shows all 64 extracted blocks with their 
+                chess notation labels. The 3×3 context helps the model distinguish similar pieces by 
+                seeing neighboring squares.
                 """
             },
             {
@@ -1177,7 +1178,7 @@ run_pipeline(
                         with result_cols[1]:
                             st.markdown("**64 Classified Squares (8×8 Grid)**")
                             if results.get("grid") is not None:
-                                st.image(cv2.cvtColor(results["grid"], cv2.COLOR_BGR2RGB), use_container_width=True)
+                                st.image(cv2.cvtColor(results["grid"], cv2.COLOR_BGR2RGB), width='stretch')
                             else:
                                 st.info("Grid visualization not available")
                         
@@ -1225,7 +1226,7 @@ run_pipeline(
                                 low_conf = conf_data[conf_data["Confidence"] < threshold].sort_values("Confidence")
                                 if not low_conf.empty:
                                     st.markdown("**Low Confidence Predictions (marked as unknown):**")
-                                    st.dataframe(low_conf, use_container_width=True)
+                                    st.dataframe(low_conf, width='content')
                                 else:
                                     st.success("All predictions above threshold!")
                     
@@ -1258,25 +1259,6 @@ run_pipeline(
                 help="Upload a photo of a chessboard",
                 key="live_demo_upload"
             )
-            
-            # Sample images option
-            st.markdown("**Or select from samples:**")
-            sample_images = load_sample_images()
-            
-            if sample_images:
-                sample_names = [f"Frame {img.stem.split('_')[1]}" for img in sample_images]
-                selected_sample = st.selectbox(
-                    "Sample images from game2",
-                    options=[""] + sample_names,
-                    index=0,
-                    key="live_demo_sample"
-                )
-                
-                if selected_sample:
-                    idx = sample_names.index(selected_sample)
-                    sample_path = sample_images[idx]
-                    st.session_state.original_image = cv2.imread(str(sample_path))
-                    st.success(f"✓ Loaded: {sample_path.name}")
             
             if uploaded_file is not None:
                 # Convert uploaded file to numpy array
@@ -1436,12 +1418,12 @@ run_pipeline(
                 if grid_path.exists():
                     grid_img = cv2.imread(str(grid_path))
                     if grid_img is not None:
-                        st.image(cv2.cvtColor(grid_img, cv2.COLOR_BGR2RGB), use_container_width=True)
+                        st.image(cv2.cvtColor(grid_img, cv2.COLOR_BGR2RGB), width='stretch')
                 elif st.session_state.squares is not None:
                     # Fallback: generate grid from squares
                     grid_img = create_grid_image(st.session_state.squares, st.session_state.labels, st.session_state.predictions)
                     if grid_img is not None:
-                        st.image(cv2.cvtColor(grid_img, cv2.COLOR_BGR2RGB), use_container_width=True)
+                        st.image(cv2.cvtColor(grid_img, cv2.COLOR_BGR2RGB), width='stretch')
             
             st.markdown("---")
             
@@ -1476,7 +1458,7 @@ run_pipeline(
                             "Label": [st.session_state.labels[i] for i in low_conf_indices],
                             "Conf": [f"{st.session_state.confidences[i]:.2%}" for i in low_conf_indices]
                         })
-                        st.dataframe(conf_data, use_container_width=True, hide_index=True)
+                        st.dataframe(conf_data, width='content', hide_index=True)
                     else:
                         st.success("✓ All predictions confident!")
     
