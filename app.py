@@ -287,15 +287,24 @@ def preprocess_image(image_array, show_debug=False):
 
 
 def create_grid_image(squares, labels=None, predictions=None):
-    """Create an 8x8 grid visualization of squares."""
-    if squares is None:
+    """Create an 8x8 grid visualization of squares/blocks."""
+    if squares is None or len(squares) == 0:
         return None
     
-    # Parameters
-    square_size = 64
+    # Detect the actual size of the input squares/blocks
+    input_size = squares[0].shape[0]  # Could be 64x64 or 192x192
+    
+    # Dynamically scale visualization
+    if input_size > 100:
+        # For large blocks (192x192), scale down to fit in grid
+        display_size = 80
+    else:
+        # For small squares (64x64), keep original size
+        display_size = 64
+    
     border = 2
     label_height = 30
-    cell_size = square_size + border * 2
+    cell_size = display_size + border * 2
     
     # Create canvas
     grid_height = 8 * (cell_size + label_height)
@@ -310,21 +319,27 @@ def create_grid_image(squares, labels=None, predictions=None):
         y_start = row * (cell_size + label_height) + border
         x_start = col * cell_size + border
         
+        # Resize square to display size if needed
+        if square.shape[0] != display_size or square.shape[1] != display_size:
+            resized_square = cv2.resize(square, (display_size, display_size))
+        else:
+            resized_square = square
+        
         # Place square
-        grid[y_start:y_start+square_size, x_start:x_start+square_size] = square
+        grid[y_start:y_start+display_size, x_start:x_start+display_size] = resized_square
         
         # Add label below
         file_letter = chr(ord('a') + col)
         rank_number = 8 - row
         position = f"{file_letter}{rank_number}"
         
-        label_y = y_start + square_size + 20
+        label_y = y_start + display_size + 20
         label_x = x_start + 10
         
         # Draw background
         cv2.rectangle(grid, 
-                     (x_start, y_start + square_size),
-                     (x_start + square_size, y_start + square_size + label_height),
+                     (x_start, y_start + display_size),
+                     (x_start + display_size, y_start + display_size + label_height),
                      (245, 245, 245), -1)
         
         # Draw position
@@ -1631,14 +1646,6 @@ run_pipeline(
                     st.code(fen_clean, language="text")
                     st.caption("Standard FEN notation")
             
-            st.markdown("---")
-            st.markdown("""
-            **Use Cases:**
-            - Import into chess engines (Stockfish, Lichess, Chess.com)
-            - Game digitization and recording
-            - Live streaming overlays
-            - Tournament analysis
-            """)
         
         
         # Add back to top button
