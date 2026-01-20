@@ -151,7 +151,7 @@ def load_sample_images():
     return []
 
 
-def run_inference_pipeline(image_path, model_path=None, threshold=0.80):
+def run_inference_pipeline(image_path, model_path=None, threshold=0.50):
     """
     Run the complete inference pipeline on an image using pipeline.py.
     
@@ -1675,7 +1675,7 @@ run_pipeline(
                     "Confidence Threshold (OOD)",
                     min_value=0.5,
                     max_value=1.0,
-                    value=0.80,
+                    value=0.50,
                     step=0.05,
                     help="Predictions below this are marked as 'unknown'",
                     key="live_demo_threshold"

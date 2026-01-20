@@ -90,7 +90,6 @@ logs/
 tensorboard/
 wandb/
 *.log
-outputs/
 
 # Temporary files
 *.tmp
@@ -111,6 +110,9 @@ test_visualization.png
 !output/*.jpg
 !output/*.jpeg
 !output/*.png
+!outputs/**/*.jpg
+!outputs/**/*.jpeg
+!outputs/**/*.png
 
 # Large archives
 *.zip
