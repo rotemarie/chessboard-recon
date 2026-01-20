@@ -81,6 +81,7 @@ saved_models/
 
 # Exception: allow the trained model for deployment
 !model/resnet18_ft.pth
+!model/resnet18_ft_blocks_black.pth
 !model/classes.txt
 
 # Training outputs
