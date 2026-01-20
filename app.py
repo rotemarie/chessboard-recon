@@ -127,12 +127,16 @@ def init_session_state():
         st.session_state.predictions = None
     if 'fen' not in st.session_state:
         st.session_state.fen = None
+    if 'fen_clean' not in st.session_state:
+        st.session_state.fen_clean = None
     if 'model' not in st.session_state:
         st.session_state.model = None
     if 'class_names' not in st.session_state:
         st.session_state.class_names = None
     if 'board_svg' not in st.session_state:
         st.session_state.board_svg = None
+    if 'board_svg_clean' not in st.session_state:
+        st.session_state.board_svg_clean = None
     if 'confidences' not in st.session_state:
         st.session_state.confidences = None
     if 'unknown_indices' not in st.session_state:
@@ -143,18 +147,24 @@ def add_back_to_top():
     """Add a back to top button at the bottom of the page."""
     st.markdown("---")
     st.markdown("""
+    <script>
+    function scrollToTop() {
+        window.parent.document.querySelector('section.main').scrollTo({top: 0, behavior: 'smooth'});
+    }
+    </script>
     <div style="text-align: center; margin-top: 2rem; margin-bottom: 2rem;">
-        <a href="#" onclick="window.scrollTo({top: 0, behavior: 'smooth'}); return false;" style="
-            display: inline-block;
+        <button onclick="scrollToTop()" style="
             padding: 0.75rem 2rem;
             background-color: #2E86AB;
             color: white;
-            text-decoration: none;
+            border: none;
             border-radius: 0.5rem;
             font-weight: bold;
+            cursor: pointer;
+            font-size: 1rem;
         ">
             ⬆️ Back to Top
-        </a>
+        </button>
     </div>
     """, unsafe_allow_html=True)
 
@@ -218,19 +228,24 @@ def run_inference_pipeline(image_path, model_path=None, threshold=0.80):
             save_square_crops=False,
             print_squares=False,
             crops_dir=None,
-            save_grid=True
+            save_grid=True,
+            save_clean_board=True
         )
         
         # Read the results
         original = cv2.imread(str(image_path))
         warped = cv2.imread(str(temp_output / "warped_board.jpg"))
         fen_path = temp_output / "fen.txt"
+        fen_clean_path = temp_output / "fen_clean.txt"
         svg_path = temp_output / "board.svg"
+        svg_clean_path = temp_output / "fen.svg"
         predictions_path = temp_output / "predictions.json"
         grid_path = temp_output / "crops_grid.jpg"
         
         fen = fen_path.read_text(encoding="utf-8") if fen_path.exists() else None
+        fen_clean = fen_clean_path.read_text(encoding="utf-8") if fen_clean_path.exists() else None
         board_svg = svg_path.read_text(encoding="utf-8") if svg_path.exists() else None
+        board_svg_clean = svg_clean_path.read_text(encoding="utf-8") if svg_clean_path.exists() else None
         
         # Load predictions
         predictions = []
@@ -253,7 +268,9 @@ def run_inference_pipeline(image_path, model_path=None, threshold=0.80):
             "confidences": confidences,
             "unknown_indices": unknown_indices,
             "fen": fen,
+            "fen_clean": fen_clean,
             "board_svg": board_svg,
+            "board_svg_clean": board_svg_clean,
             "predictions": predictions
         }
     
@@ -1692,7 +1709,7 @@ run_pipeline(
                 h, w = st.session_state.original_image.shape[:2]
                 st.info(f"📐 Image Size: {w} × {h} pixels")
             else:
-                st.info("👆 Upload or select an image to begin")
+                st.info("👈 Upload or select an image to begin")
         
         # Step 2: Preprocessing
         if st.session_state.original_image is not None:
@@ -1782,7 +1799,9 @@ run_pipeline(
                             st.session_state.confidences = results["confidences"]
                             st.session_state.unknown_indices = results["unknown_indices"]
                             st.session_state.fen = results["fen"]
+                            st.session_state.fen_clean = results.get("fen_clean")
                             st.session_state.board_svg = results["board_svg"]
+                            st.session_state.board_svg_clean = results.get("board_svg_clean")
                             st.session_state.predictions = results.get("predictions", [])
                             
                             st.success("✓ Classification complete! See results below.")
@@ -1819,46 +1838,54 @@ run_pipeline(
             # Show board and grid side by side
             st.markdown("**Outputs:**")
             
-            output_cols = st.columns(2)
+            # Show both versions of the board
+            board_cols = st.columns(2)
             
-            with output_cols[0]:
-                st.markdown("Reconstructed Chessboard")
+            with board_cols[0]:
+                st.markdown("**With OOD Detection** (Red X = Uncertain)")
                 if st.session_state.board_svg:
-                    st.components.v1.html(st.session_state.board_svg, height=450)
+                    st.components.v1.html(st.session_state.board_svg, height=550, scrolling=False)
             
-            with output_cols[1]:
-                st.markdown("64 Classified Squares (8×8 Grid)")
-                # Try to load grid from inference results
-                temp_output = Path(__file__).parent / "temp" / "inference_output"
-                grid_path = temp_output / "crops_grid.jpg"
-                if grid_path.exists():
-                    grid_img = cv2.imread(str(grid_path))
-                    if grid_img is not None:
-                        st.image(cv2.cvtColor(grid_img, cv2.COLOR_BGR2RGB), width='stretch')
-                elif st.session_state.squares is not None:
-                    # Fallback: generate grid from squares
-                    grid_img = create_grid_image(st.session_state.squares, st.session_state.labels, st.session_state.predictions)
-                    if grid_img is not None:
-                        st.image(cv2.cvtColor(grid_img, cv2.COLOR_BGR2RGB), width='stretch')
+            with board_cols[1]:
+                st.markdown("**Clean Board** (Final Output)")
+                if st.session_state.board_svg_clean:
+                    st.components.v1.html(st.session_state.board_svg_clean, height=550, scrolling=False)
+                elif st.session_state.board_svg:
+                    st.components.v1.html(st.session_state.board_svg, height=550, scrolling=False)
+            
+            st.markdown("---")
+            
+            # Show grid
+            st.markdown("**64 Classified Blocks (8×8 Grid):**")
+            # Try to load grid from inference results
+            temp_output = Path(__file__).parent / "temp" / "inference_output"
+            grid_path = temp_output / "crops_grid.jpg"
+            if grid_path.exists():
+                grid_img = cv2.imread(str(grid_path))
+                if grid_img is not None:
+                    st.image(cv2.cvtColor(grid_img, cv2.COLOR_BGR2RGB), width='stretch')
+            elif st.session_state.squares is not None:
+                # Fallback: generate grid from squares
+                grid_img = create_grid_image(st.session_state.squares, st.session_state.labels, st.session_state.predictions)
+                if grid_img is not None:
+                    st.image(cv2.cvtColor(grid_img, cv2.COLOR_BGR2RGB), width='stretch')
             
             st.markdown("---")
             
             col1, col2 = st.columns([1, 1])
             
             with col1:
-                st.markdown("**FEN Notation**")
+                st.markdown("**FEN Notation (with OOD)**")
                 st.code(st.session_state.fen, language="text")
+                st.caption("'?' indicates low-confidence predictions")
             
             with col2:
-                st.markdown("**Statistics & Confidence**")
-                
-                st.markdown("""
-                **FEN Components:**
-                - White: `P N B R Q K`
-                - Black: `p n b r q k`
-                - Empty: numbers
-                - Unknown: `?`
-                """)
+                st.markdown("**FEN Notation (Clean)**")
+                if st.session_state.fen_clean:
+                    st.code(st.session_state.fen_clean, language="text")
+                    st.caption("Ready for chess engines")
+                else:
+                    st.code(st.session_state.fen, language="text")
                 
                 # Show low confidence predictions
                 if st.session_state.confidences:
