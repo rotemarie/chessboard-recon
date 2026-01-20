@@ -143,32 +143,6 @@ def init_session_state():
         st.session_state.unknown_indices = None
 
 
-def add_back_to_top():
-    """Add a back to top button at the bottom of the page."""
-    st.markdown("---")
-    st.markdown("""
-    <script>
-    function scrollToTop() {
-        window.parent.document.querySelector('section.main').scrollTo({top: 0, behavior: 'smooth'});
-    }
-    </script>
-    <div style="text-align: center; margin-top: 2rem; margin-bottom: 2rem;">
-        <button onclick="scrollToTop()" style="
-            padding: 0.75rem 2rem;
-            background-color: #2E86AB;
-            color: white;
-            border: none;
-            border-radius: 0.5rem;
-            font-weight: bold;
-            cursor: pointer;
-            font-size: 1rem;
-        ">
-            ⬆️ Back to Top
-        </button>
-    </div>
-    """, unsafe_allow_html=True)
-
-
 def load_sample_images():
     """Load available sample images."""
     samples_dir = Path(__file__).parent / "data/per_frame/game2_per_frame/tagged_images"
@@ -500,9 +474,6 @@ def main():
             
             **[github.com/rotemarie/chessboard-recon](https://github.com/rotemarie/chessboard-recon)**
             """)
-        
-        # Add back to top button
-        add_back_to_top()
     
     # Tab 2: Work Process (with nested tabs for challenges)
     with tab2:
@@ -1271,9 +1242,6 @@ def main():
             else:
                 st.error("Image not found: 33_vs_og_ood.png")
         
-        # Add back to top button
-        add_back_to_top()
-    
     # Tab 3: Pipeline (functionality and integration)
     with tab3:
         st.markdown('<div class="sub-header">Complete Processing Pipeline</div>', 
@@ -1563,7 +1531,6 @@ run_pipeline(
                 """)
         
         # Add back to top button
-        add_back_to_top()
     
     # Tab 4: Full Demo (Interactive Walkthrough)
     with tab4:
@@ -1664,9 +1631,6 @@ run_pipeline(
                     st.caption("Standard FEN notation")
             
         
-        
-        # Add back to top button
-        add_back_to_top()
     
     # Tab 5: Live Demo (Consolidated)
     with tab5:
@@ -1845,6 +1809,9 @@ run_pipeline(
                 st.markdown("**With OOD Detection** (Red X = Uncertain)")
                 if st.session_state.board_svg:
                     st.components.v1.html(st.session_state.board_svg, height=550, scrolling=False)
+                st.markdown("**FEN Notation (with OOD)**")
+                st.code(st.session_state.fen, language="text")
+                st.caption("'?' indicates low-confidence predictions")
             
             with board_cols[1]:
                 st.markdown("**Clean Board** (Final Output)")
@@ -1852,10 +1819,16 @@ run_pipeline(
                     st.components.v1.html(st.session_state.board_svg_clean, height=550, scrolling=False)
                 elif st.session_state.board_svg:
                     st.components.v1.html(st.session_state.board_svg, height=550, scrolling=False)
+                st.markdown("**FEN Notation (Clean)**")
+                if st.session_state.fen_clean:
+                    st.code(st.session_state.fen_clean, language="text")
+                    st.caption("Ready for chess engines")
+                else:
+                    st.code(st.session_state.fen, language="text")
             
             st.markdown("---")
             
-            # Show grid
+            # Show grid (smaller)
             st.markdown("**64 Classified Blocks (8×8 Grid):**")
             # Try to load grid from inference results
             temp_output = Path(__file__).parent / "temp" / "inference_output"
@@ -1863,50 +1836,16 @@ run_pipeline(
             if grid_path.exists():
                 grid_img = cv2.imread(str(grid_path))
                 if grid_img is not None:
-                    st.image(cv2.cvtColor(grid_img, cv2.COLOR_BGR2RGB), width='stretch')
+                    # Display grid at 60% width for smaller size
+                    st.image(cv2.cvtColor(grid_img, cv2.COLOR_BGR2RGB), width=800)
             elif st.session_state.squares is not None:
                 # Fallback: generate grid from squares
                 grid_img = create_grid_image(st.session_state.squares, st.session_state.labels, st.session_state.predictions)
                 if grid_img is not None:
-                    st.image(cv2.cvtColor(grid_img, cv2.COLOR_BGR2RGB), width='stretch')
+                    st.image(cv2.cvtColor(grid_img, cv2.COLOR_BGR2RGB), width=800)
             
             st.markdown("---")
-            
-            col1, col2 = st.columns([1, 1])
-            
-            with col1:
-                st.markdown("**FEN Notation (with OOD)**")
-                st.code(st.session_state.fen, language="text")
-                st.caption("'?' indicates low-confidence predictions")
-            
-            with col2:
-                st.markdown("**FEN Notation (Clean)**")
-                if st.session_state.fen_clean:
-                    st.code(st.session_state.fen_clean, language="text")
-                    st.caption("Ready for chess engines")
-                else:
-                    st.code(st.session_state.fen, language="text")
-                
-                # Show low confidence predictions
-                if st.session_state.confidences:
-                    import pandas as pd
-                    
-                    threshold = confidence_threshold if 'confidence_threshold' in locals() else 0.80
-                    low_conf_indices = [i for i, c in enumerate(st.session_state.confidences) if c < threshold]
-                    
-                    if low_conf_indices:
-                        st.markdown("**⚠️ Low Confidence:**")
-                        conf_data = pd.DataFrame({
-                            "Sq": [f"{i:02d}" for i in low_conf_indices],
-                            "Label": [st.session_state.labels[i] for i in low_conf_indices],
-                            "Conf": [f"{st.session_state.confidences[i]:.2%}" for i in low_conf_indices]
-                        })
-                        st.dataframe(conf_data, width='content', hide_index=True)
-                    else:
-                        st.success("✓ All predictions confident!")
         
-        # Add back to top button
-        add_back_to_top()
     
     # Footer
     st.markdown("---")
