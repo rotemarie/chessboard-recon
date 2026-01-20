@@ -477,7 +477,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--image", required=True, help="Path to input image.")
     parser.add_argument(
         "--model",
-        default=str(Path("model") / "resnet18_ft.pth"),
+        default=str(Path("model") / "resnet18_ft_blocks_black.pth"),
         help="Path to model .pth file.",
     )
     parser.add_argument(
