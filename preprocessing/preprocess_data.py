@@ -1,5 +1,5 @@
 """
-Main Preprocessing Script
+OLD Main Preprocessing Script - Kept for reference
 
 This script processes all labeled game data:
 1. Loads images and their corresponding FEN labels from CSV files

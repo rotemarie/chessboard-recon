@@ -181,11 +181,11 @@ def main():
     # Model arguments
     parser.add_argument('--model', type=str, default='resnet18',
                        choices=['resnet18', 'resnet50', 'vgg16'],
-                       help='Model architecture (default: resnet18)')
+                       help='Model architecture (default: resnet18 - recommended, used in project)')
     parser.add_argument('--freeze-backbone', action='store_true',
-                       help='Freeze backbone for transfer learning')
+                       help='Freeze backbone for transfer learning (not recommended - use fine-tuning)')
     parser.add_argument('--no-pretrained', action='store_true',
-                       help='Do not use pretrained weights')
+                       help='Do not use pretrained ImageNet weights (not recommended)')
     
     # Training arguments
     parser.add_argument('--epochs', type=int, default=100,

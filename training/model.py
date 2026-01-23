@@ -1,5 +1,8 @@
 """
 Model architectures for chess piece classification.
+
+This project uses ResNet18 fine-tuning as the primary method (89.08% val accuracy).
+Other architectures (ResNet50, VGG16) are available but ResNet18 performed best.
 """
 
 import torch
@@ -12,13 +15,21 @@ def get_model(model_name='resnet18', num_classes=13, pretrained=True, freeze_bac
     Get a model for chess piece classification.
     
     Args:
-        model_name: Name of the architecture ('resnet18', 'resnet50', 'vgg16')
+        model_name: Name of the architecture. Options:
+            - 'resnet18' (recommended - used in this project, 89% accuracy)
+            - 'resnet50' (experimental - larger model, 23M params)
+            - 'vgg16' (experimental - much larger, 138M params)
         num_classes: Number of classes (default: 13 for chess pieces)
-        pretrained: Whether to use pretrained weights
-        freeze_backbone: Whether to freeze the backbone (transfer learning)
+        pretrained: Whether to use pretrained ImageNet weights (recommended: True)
+        freeze_backbone: Whether to freeze the backbone for transfer learning
+                        (recommended: False for fine-tuning)
         
     Returns:
-        model: PyTorch model
+        model: PyTorch model ready for training/inference
+        
+    Example:
+        # ResNet18 fine-tuning (method used in project)
+        model = get_model('resnet18', num_classes=13, pretrained=True)
     """
     if model_name == 'resnet18':
         if pretrained:
