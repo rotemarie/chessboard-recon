@@ -5,17 +5,17 @@ This directory contains the preprocessing pipeline for converting raw chessboard
 ## Get Data
 
 The data can be found at this link: https://drive.google.com/drive/folders/1WBEpr_TlmAv0hlVfa9ORQXABOIlqjwWz?usp=sharing
-- data/ - Raw chessboard images and labels
-- preprocessed_data/ - All labeled squares extracted from raw images (before split)
-- dataset/ - Split data organized into train/val/test sets (70/15/15)
+
+This folder contains:
+- **Processed dataset**: `dataset_blocks_black.zip` - Pre-processed 3×3 block crops, ready for training
 
 ## Overview
 
 The preprocessing pipeline consists of three main steps:
 
-1. **Board Detection & Warping**: Find the chessboard in the image and apply perspective transformation to get a top-down view
-2. **Square Extraction**: Slice the warped board into 64 individual square images
-3. **Labeling**: Label each square based on the FEN notation from the CSV files
+1. **Board Detection & Warping**: Find the chessboard in the image and apply perspective transformation to get a top-down view (512×512 pixels)
+2. **Block Extraction**: Extract 64 3×3 block crops (192×192 pixels each), centered on each square, providing context for classification
+3. **Labeling**: Label each block based on the piece at the center square using FEN notation from the CSV files
 
 ## Modules
 
@@ -39,35 +39,54 @@ detector = BoardDetector(board_size=512)
 warped = detector.detect_board(image, debug=False)
 ```
 
-### 2. `square_extractor.py`
+### 2. `create_block_dataset.py`
 
-Handles square extraction and FEN parsing.
+Handles 3×3 block extraction and FEN parsing - **this is the current method used**.
 
 **Key Features:**
-- Extracts 64 squares from a warped board
-- Maps square indices to chess notation (a8, b8, ..., h1)
-- Parses FEN notation to get piece labels for each square
-- Supports visualization of extracted squares
+- Extracts 64 blocks (3×3 squares, 192×192 pixels) centered on each target square
+- Provides surrounding context to help distinguish similar pieces (e.g., bishops vs queens)
+- Uses black padding (`cv2.BORDER_CONSTANT`) for edge blocks to avoid artifacts
+- Maps block indices to chess notation (a8, b8, ..., h1)
+- Parses FEN notation to get piece labels for each block's center square
 
 **Main Classes:**
-- `SquareExtractor`: Extracts and visualizes squares
-- `FENParser`: Converts between FEN notation and piece labels
+- `BlockSquareExtractor`: Extracts 3×3 block crops with configurable padding
+- `FENParser`: Converts between FEN notation and piece labels (in `square_extractor.py`)
 
 **Usage:**
 ```python
-from square_extractor import SquareExtractor, FENParser
+from create_block_dataset import BlockSquareExtractor
+from square_extractor import FENParser
 
-extractor = SquareExtractor(board_size=512)
-squares = extractor.extract_squares(warped_board)
+extractor = BlockSquareExtractor(
+    board_size=512, 
+    border_mode='constant', 
+    border_color='black'
+)
+blocks = extractor.extract_blocks(warped_board)  # 64 blocks, each 192×192
 
 labels = FENParser.fen_to_labels("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR")
 ```
 
-### 3. `preprocess_data.py`
+**Why 3×3 Blocks?**
+- **Problem**: Original 1×1 square crops (64×64) cut off tall pieces (queens, kings, bishops) when photographed at an angle
+- **Solution**: 3×3 blocks capture the target square plus surrounding context, significantly improving accuracy on tall pieces
+- **Result**: Validation accuracy improved from ~85% to ~89%, with dramatic improvements on queen/king/bishop classes
 
-Main preprocessing script that ties everything together.
+### 3. `square_extractor.py`
 
-### 4. `split_dataset.py`
+Original square extraction (legacy, kept for reference and FEN parsing utilities).
+
+**Note**: The project now uses `BlockSquareExtractor` from `create_block_dataset.py` for better performance.
+
+### 4. `preprocess_data.py`
+
+Main preprocessing script (uses original square extraction, for reference).
+
+**For block-based preprocessing**, run `create_block_dataset.py` directly (see its `main()` function).
+
+### 5. `split_dataset.py`
 
 Dataset splitting script that creates train/val/test splits.
 
@@ -97,13 +116,13 @@ python split_dataset.py
 
 ## Output Structure
 
-### After Preprocessing (`preprocess_data.py`)
+### After Block Preprocessing (`create_block_dataset.py`)
 
 ```
-preprocessed_data/
-├── train/                      # All labeled squares (before split)
+preprocessed_data_blocks/
+├── train/                      # All labeled 3×3 blocks (before split)
 │   ├── black_bishop/
-│   │   ├── game2_frame_000200_c8.jpg
+│   │   ├── game2_frame_000200_c8.jpg  # 192×192 block centered on c8
 │   │   ├── game2_frame_000200_f8.jpg
 │   │   └── ...
 │   ├── black_king/
@@ -118,29 +137,21 @@ preprocessed_data/
 │   ├── white_queen/
 │   ├── white_rook/
 │   └── empty/
-├── warped_boards/              # For inspection
-│   ├── game2_frame_000200.jpg
-│   └── ...
-├── failed_detections/          # Failed board detections
-│   └── ...
-└── metadata/                   # Processing logs
-    ├── game2_metadata.csv
-    └── ...
 ```
 
 ### After Splitting (`split_dataset.py`)
 
 ```
-dataset/
-├── train/                      # Training set (70%)
+dataset_blocks/
+├── train/                      # Training set (70% of games)
+│   ├── black_bishop/           # 192×192 block crops
+│   ├── black_king/
+│   └── ... (all 13 classes)
+├── val/                        # Validation set (15% of games)
 │   ├── black_bishop/
 │   ├── black_king/
 │   └── ... (all 13 classes)
-├── val/                        # Validation set (15%)
-│   ├── black_bishop/
-│   ├── black_king/
-│   └── ... (all 13 classes)
-├── test/                       # Test set (15%)
+├── test/                       # Test set (15% of games)
 │   ├── black_bishop/
 │   ├── black_king/
 │   └── ... (all 13 classes)
@@ -148,6 +159,14 @@ dataset/
 ```
 
 **Important:** The split is done BY GAME to prevent data leakage!
+
+### Legacy Output (Original Square Extraction)
+
+For reference, the original pipeline (`preprocess_data.py`) created 64×64 crops:
+- `preprocessed_data/` - 64×64 square crops
+- `dataset/` - Train/val/test splits of 64×64 crops
+
+**Note**: The block-based approach (`dataset_blocks/`) is now the recommended method.
 
 ## Piece Classes
 

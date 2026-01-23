@@ -41,10 +41,17 @@ INPUT: Raw chessboard image from video frame
          ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                                                               │
-│  STEP 2: SQUARE EXTRACTION (square_extractor.py)            │
+│  STEP 2: 3×3 BLOCK EXTRACTION (create_block_dataset.py)     │
 │                                                               │
-│  Split 512x512 board into 8x8 grid                          │
-│  Each square: 64x64 pixels                                   │
+│  Extract 64 blocks, each 3×3 squares (192×192 pixels)       │
+│  Each block centered on a target square                      │
+│                                                               │
+│  Process:                                                     │
+│  1. Pad 512×512 board with black borders                    │
+│     (cv2.BORDER_CONSTANT, color=[0,0,0])                    │
+│  2. For each of 64 target squares (center positions):       │
+│     - Calculate 3×3 block region around center              │
+│     - Extract 192×192 pixel block                           │
 │                                                               │
 │  Order: Row by row, left to right                            │
 │  a8, b8, c8, d8, e8, f8, g8, h8,                            │
@@ -52,9 +59,14 @@ INPUT: Raw chessboard image from video frame
 │  ...,                                                         │
 │  a1, b1, c1, d1, e1, f1, g1, h1                             │
 │                                                               │
+│  Why 3×3 blocks?                                             │
+│  - Captures surrounding context (adjacent squares)           │
+│  - Prevents cutting off tall pieces (queens, kings)          │
+│  - Improved accuracy: 85% → 89% validation accuracy         │
+│                                                               │
 └─────────────────────────────────────────────────────────────┘
          ┃
-         ┃  64 square images
+         ┃  64 block images (192×192 each)
          ┃
          ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -87,26 +99,23 @@ INPUT: Raw chessboard image from video frame
          ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                                                               │
-│  STEP 4: SAVE LABELED SQUARES (preprocess_data.py)          │
+│  STEP 4: SAVE LABELED BLOCKS (create_block_dataset.py)      │
 │                                                               │
-│  For each square and its label:                              │
+│  For each 3×3 block and its center square label:            │
 │                                                               │
-│    filename: game2_frame_000200_a8.jpg                       │
-│    path: preprocessed_data/train/black_rook/                │
+│    filename: game2_frame_000200_a8.jpg  (192×192)           │
+│    path: preprocessed_data_blocks/train/black_rook/         │
 │                                                               │
-│  Also save:                                                  │
-│    - Warped board (for inspection)                           │
-│    - Metadata (processing status)                            │
-│    - Failed detections (for debugging)                       │
+│  Label is based on the CENTER square of each 3×3 block      │
 │                                                               │
 └─────────────────────────────────────────────────────────────┘
          ┃
          ┃
          ▼
 OUTPUT: Organized dataset ready for training
-        preprocessed_data/train/
-          ├── white_pawn/     (many images)
-          ├── white_knight/   (fewer images)
+        preprocessed_data_blocks/train/
+          ├── white_pawn/     (many 192×192 blocks)
+          ├── white_knight/   (fewer blocks)
           ├── white_bishop/
           ├── white_rook/
           ├── white_queen/
@@ -117,33 +126,43 @@ OUTPUT: Organized dataset ready for training
           ├── black_rook/
           ├── black_queen/
           ├── black_king/
-          └── empty/          (most images)
+          └── empty/          (most blocks)
 
 
 KEY DESIGN DECISIONS
 ====================
 
-1. Board Size: 512x512 pixels
+1. Board Size: 512×512 pixels
    - Large enough to preserve detail
    - Power of 2 (efficient for neural networks)
-   - Square size: 64x64 pixels
+   - Each square: 64×64 pixels
+   - Each 3×3 block: 192×192 pixels
 
-2. Corner Ordering: [Top-Left, Top-Right, Bottom-Right, Bottom-Left]
+2. Block Extraction (Current Method)
+   - Extract 3×3 blocks (192×192) instead of 1×1 squares (64×64)
+   - Provides surrounding context for better classification
+   - Black padding (cv2.BORDER_CONSTANT) for edge blocks
+   - Label based on CENTER square of each block
+   - Significantly improved accuracy on tall pieces
+
+3. Corner Ordering: [Top-Left, Top-Right, Bottom-Right, Bottom-Left]
    - Consistent orientation
    - Matches chessboard convention
 
-3. Square Indexing: Rank 8 to Rank 1, File a to File h
+4. Block/Square Indexing: Rank 8 to Rank 1, File a to File h
    - Matches FEN notation order
    - Index 0 = a8, Index 63 = h1
 
-4. Class Names: "color_piece" format
+5. Class Names: "color_piece" format
    - Clear and unambiguous
    - Easy to parse and visualize
+   - 13 classes total (12 pieces + empty)
 
-5. Filename Format: "game_frame_position.jpg"
+6. Filename Format: "game_frame_position.jpg"
    - Traceable back to source
    - Unique identifier
    - Contains position information
+   - Same format for both squares and blocks
 
 
 TRICKY PARTS & SOLUTIONS

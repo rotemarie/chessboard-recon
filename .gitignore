@@ -32,6 +32,9 @@ venv.bak/
 # Jupyter Notebook
 .ipynb_checkpoints
 
+# Development notebook (code extracted to training/ modules)
+Chess_Piece_Recognition.ipynb
+
 # IDEs
 .idea/
 .vscode/
@@ -47,15 +50,10 @@ APP_README.md
 .AppleDouble
 .LSOverride
 
-# Data files (hosted externally - see data/README.md)
-data/per_frame/
-data/PGN/
-data/*.zip
-data/*.tar.gz
-data/*.rar
-# Keep the README explaining where to get data
-!data/README.md
-!data/.gitkeep
+# Data files (hosted externally - see main README.md for download links)
+data/
+dataset_padded/
+old data/
 
 # Preprocessed outputs (can be regenerated)
 preprocessed_data/
@@ -102,7 +100,7 @@ test_visualization.png
 *.png
 *.jpg
 *.jpeg
-# But keep any images in docs, examples, and output (for demo)
+# But keep any images in docs, examples, output, and for_ui (for demo/UI)
 !docs/**/*.png
 !docs/**/*.jpg
 !examples/**/*.png
@@ -113,6 +111,11 @@ test_visualization.png
 !outputs/**/*.jpg
 !outputs/**/*.jpeg
 !outputs/**/*.png
+!for_ui/**/*.png
+!for_ui/**/*.jpg
+!for_ui/**/*.jpeg
+!full_demo/**/*.jpg
+!full_demo/**/*.jpeg
 
 # Large archives
 *.zip
