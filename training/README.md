@@ -56,18 +56,35 @@ python train.py \
 python evaluate.py \
   --checkpoint ../model/resnet18_ft_blocks_black.pth \
   --model resnet18 \
-  --data-dir ../dataset_blocks \
+  --data-dir ../dataset_blocks/dataset_blocks \
+  --split val
+
+# Evaluate on balanced validation set - stohastic!
+python evaluate.py \
+  --checkpoint ../model/resnet18_ft_blocks_black.pth \
+  --model resnet18 \
+  --data-dir ../dataset_blocks/dataset_blocks \
   --split val \
-  --output-dir ../evaluation_results
+  --balanced
 
 # Evaluate on test set
 python evaluate.py \
   --checkpoint ../model/resnet18_ft_blocks_black.pth \
   --model resnet18 \
-  --data-dir ../dataset_blocks \
+  --data-dir ../dataset_blocks/dataset_blocks \
+  --split test
+
+# Evaluate on balanced test set - stohastic!
+python evaluate.py \
+  --checkpoint ../model/resnet18_ft_blocks_black.pth \
+  --model resnet18 \
+  --data-dir ../dataset_blocks/dataset_blocks \
   --split test \
-  --output-dir ../evaluation_results
+  --balanced
+
 ```
+### 3. additional functions
+All the original code is available in the following [colab notebook](https://colab.research.google.com/drive/1DEGRLKDpRhFbu_JpW8qAPePDwDnzLGKm?usp=sharing), have fun :)
 
 ## 📚 Module Documentation
 
