@@ -6,7 +6,8 @@ Deep learning models for chess piece classification.
 
 **ResNet18 Fine-Tuning** achieved the best results:
 - **Architecture**: ResNet18 (11M parameters)
-- **Test Accuracy**: 89.56% (BALANCED TEST SET - HARDER!)
+- **Test Accuracy**: 89.56% (BALANCED TEST SET - HARDER! and a better estimator)
+- **Unbalanced Test Accuracy**: 0.956% (to be comparable with the other groups)
 - **Training Mode**: Fine-tuning (all layers trainable)
 - **Class Balancing**: Weighted random sampling
 - **Input Size**: 192×192 (3×3 block crops)
