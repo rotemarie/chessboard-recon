@@ -1,0 +1,22 @@
+Overall Accuracy: 0.9514
+Mean Confidence: 0.9549
+
+              precision    recall  f1-score   support
+
+black_bishop     0.6667    0.7677    0.7136        99
+  black_king     0.8833    0.9636    0.9217        55
+black_knight     0.7570    0.9878    0.8571        82
+  black_pawn     0.9838    0.9381    0.9604       388
+ black_queen     1.0000    0.5273    0.6905        55
+  black_rook     0.7413    0.9636    0.8379       110
+       empty     0.9958    0.9728    0.9842      1947
+white_bishop     0.8879    0.8559    0.8716       111
+  white_king     0.9153    0.9818    0.9474        55
+white_knight     0.8810    0.9024    0.8916        82
+  white_pawn     0.9948    0.9795    0.9871       390
+ white_queen     0.7692    0.9091    0.8333        55
+  white_rook     0.9490    1.0000    0.9738        93
+
+    accuracy                         0.9514      3522
+   macro avg     0.8788    0.9038    0.8823      3522
+weighted avg     0.9578    0.9514    0.9523      3522
