@@ -39,7 +39,7 @@ training/
 ```bash
 # Train from scratch (reproduces project results)
 python train.py \
-  --data-dir ../dataset_blocks \
+  --data-dir ../dataset_blocks/dataset_blocks \
   --model resnet18 \
   --batch-size 16 \
   --epochs 100 \
