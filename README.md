@@ -149,17 +149,31 @@ cd training
 python evaluate.py \
   --checkpoint ../model/resnet18_ft_blocks_black.pth \
   --model resnet18 \
-  --data-dir ../dataset_blocks \
+  --data-dir ../dataset_blocks/dataset_blocks \
+  --split val
+
+# Evaluate on balanced validation set - stohastic!
+python evaluate.py \
+  --checkpoint ../model/resnet18_ft_blocks_black.pth \
+  --model resnet18 \
+  --data-dir ../dataset_blocks/dataset_blocks \
   --split val \
-  --output-dir ../evaluation_results
+  --balanced
 
 # Evaluate on test set
 python evaluate.py \
   --checkpoint ../model/resnet18_ft_blocks_black.pth \
   --model resnet18 \
-  --data-dir ../dataset_blocks \
+  --data-dir ../dataset_blocks/dataset_blocks \
+  --split test
+
+# Evaluate on balanced test set - stohastic!
+python evaluate.py \
+  --checkpoint ../model/resnet18_ft_blocks_black.pth \
+  --model resnet18 \
+  --data-dir ../dataset_blocks/dataset_blocks \
   --split test \
-  --output-dir ../evaluation_results
+  --balanced
 
 cd ..
 ```
