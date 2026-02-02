@@ -14,50 +14,47 @@ import seaborn as sns
 from pathlib import Path
 
 from model import load_model, get_model
-from utils import load_datasets, get_dataloaders, IMAGENET_MEAN, IMAGENET_STD
+from utils import create_weighted_sampler, load_datasets, get_dataloaders, IMAGENET_MEAN, IMAGENET_STD
+
+def eval_extended(model, dataloader_clean, dataloader_occluded, device, confidence_threshold=0.8):
+  model.eval()
+
+  with torch.no_grad():
+    corrects = 0.0
+    num_samples = 0
+
+    for inputs, labels in tqdm(dataloader_occluded):
+      inputs = inputs.to(device)
+      labels = labels.to(device)
+      outputs = model(inputs)
+      probs = torch.softmax(outputs, dim=1)
+      confs, preds = probs.max(dim=1)
+
+      correct = preds == labels
+      low_conf = confs < confidence_threshold
+
+      accepted = correct | low_conf
 
 
-def evaluate_model(model, dataloader, device, return_predictions=False):
-    """
-    Evaluate model on a dataset.
-    
-    Args:
-        model: PyTorch model
-        dataloader: DataLoader for evaluation
-        device: Device to run on
-        return_predictions: Whether to return predictions and labels
-        
-    Returns:
-        accuracy: Overall accuracy
-        predictions: (optional) List of predictions
-        labels: (optional) List of ground truth labels
-        confidences: (optional) List of confidence scores
-    """
-    model.eval()
-    
-    all_preds = []
-    all_labels = []
-    all_confs = []
-    
-    with torch.no_grad():
-        for inputs, labels in tqdm(dataloader, desc="Evaluating"):
-            inputs = inputs.to(device)
-            labels = labels.to(device)
-            
-            outputs = model(inputs)
-            probs = F.softmax(outputs, dim=1)
-            confs, preds = torch.max(probs, 1)
-            
-            all_preds.extend(preds.cpu().numpy())
-            all_labels.extend(labels.cpu().numpy())
-            all_confs.extend(confs.cpu().numpy())
-    
-    accuracy = accuracy_score(all_labels, all_preds)
-    
-    if return_predictions:
-        return accuracy, np.array(all_preds), np.array(all_labels), np.array(all_confs)
-    else:
-        return accuracy
+      corrects += accepted.sum().item()
+      num_samples += labels.size(0)
+
+    for inputs, labels in tqdm(dataloader_clean):
+      inputs = inputs.to(device)
+      labels = labels.to(device)
+
+      outputs = model(inputs)
+      probs = torch.softmax(outputs, dim=1)
+      _, preds = probs.max(dim=1)
+
+      corrects += (preds == labels).sum().item()
+      num_samples += labels.size(0)
+
+  accuracy = corrects / num_samples
+  return accuracy
+
+
+
 
 
 def plot_confusion_matrix(y_true, y_pred, class_names, save_path=None, normalize=False):
@@ -293,6 +290,8 @@ def main():
                        help='Batch size')
     parser.add_argument('--num-workers', type=int, default=2,
                        help='Number of data loading workers')
+    parser.add_argument('--balanced', action='store_true',
+                        help='test on balanced dataset')
     
     # OOD detection (optional)
     parser.add_argument('--occluded-dir', type=str, default=None,
@@ -327,10 +326,15 @@ def main():
     from pathlib import Path
     
     data_root = Path(args.data_dir)
-    split_dir = data_root / args.split
+    split_clean_dir = data_root / (args.split + "_clean")
+    split_occluded_dir = data_root / (args.split + "_occluded")
+
     
-    if not split_dir.exists():
-        raise ValueError(f"Split directory not found: {split_dir}")
+    if not split_clean_dir.exists():
+        raise ValueError(f"Split directory not found: {split_clean_dir}")
+    
+    if not split_occluded_dir.exists():
+        raise ValueError(f"Split directory not found: {split_occluded_dir}")
     
     # Use the existing split directory structure
     from torchvision import datasets, transforms
@@ -341,67 +345,42 @@ def main():
         transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD)
     ])
     
-    dataset = datasets.ImageFolder(str(split_dir), transform=transform)
-    dataloader = torch.utils.data.DataLoader(
-        dataset, batch_size=args.batch_size, 
-        shuffle=False, num_workers=args.num_workers
-    )
+    dataset_clean = datasets.ImageFolder(str(split_clean_dir), transform=transform)
+    dataset_occluded = datasets.ImageFolder(str(split_occluded_dir), transform=transform)
+
+    if args.balanced: 
+        dataloader_clean = torch.utils.data.DataLoader(
+            dataset_clean, batch_size=args.batch_size, 
+            sampler=create_weighted_sampler(dataset_clean), num_workers=args.num_workers
+        )
+        dataloader_occluded = torch.utils.data.DataLoader(
+            dataset_occluded, batch_size=args.batch_size, 
+            sampler=create_weighted_sampler(dataset_occluded), num_workers=args.num_workers
+        )
+    else: 
+        dataloader_clean = torch.utils.data.DataLoader(
+            dataset_clean, batch_size=args.batch_size, 
+            shuffle=False, num_workers=args.num_workers
+        )
+        dataloader_occluded = torch.utils.data.DataLoader(
+            dataset_occluded, batch_size=args.batch_size, 
+            shuffle=False, num_workers=args.num_workers
+        )
+
     
-    class_names = dataset.classes
+    class_names = dataset_clean.classes
     print(f"  Classes: {len(class_names)}")
-    print(f"  Samples: {len(dataset)}\n")
+    print(f"  Samples: {len(dataset_clean)}\n")
     
     # Evaluate
     print("Evaluating model...")
-    accuracy, predictions, labels, confidences = evaluate_model(
-        model, dataloader, device, return_predictions=True
+    accuracy = eval_extended(
+        model, dataloader_clean,dataloader_occluded, device
     )
     
     print(f"\n✅ Overall Accuracy: {accuracy:.4f}")
-    print(f"   Mean Confidence: {confidences.mean():.4f}\n")
     
-    # Print classification report
-    print("Classification Report:")
-    print("=" * 80)
-    report = classification_report(labels, predictions, target_names=class_names, digits=4)
-    print(report)
-    
-    # Save classification report
-    report_path = Path(args.output_dir) / f'{args.split}_classification_report.txt'
-    with open(report_path, 'w') as f:
-        f.write(f"Overall Accuracy: {accuracy:.4f}\n")
-        f.write(f"Mean Confidence: {confidences.mean():.4f}\n\n")
-        f.write(report)
-    print(f"✓ Saved report to: {report_path}\n")
-    
-    # Plot confusion matrix
-    print("Generating confusion matrix...")
-    plot_confusion_matrix(
-        labels, predictions, class_names,
-        save_path=Path(args.output_dir) / f'{args.split}_confusion_matrix.png'
-    )
-    
-    # Plot normalized confusion matrix
-    plot_confusion_matrix(
-        labels, predictions, class_names,
-        save_path=Path(args.output_dir) / f'{args.split}_confusion_matrix_normalized.png',
-        normalize=True
-    )
-    
-    # Plot per-class metrics
-    print("Generating per-class metrics plot...")
-    plot_per_class_metrics(
-        labels, predictions, class_names,
-        save_path=Path(args.output_dir) / f'{args.split}_per_class_metrics.png'
-    )
-    
-    # Plot confidence distribution
-    print("Generating confidence distribution...")
-    plot_confidence_distribution(
-        confidences, labels, class_names,
-        save_path=Path(args.output_dir) / f'{args.split}_confidence_distribution.png'
-    )
-    
+  
     # OOD analysis (if provided)
     if args.clean_dir and args.occluded_dir:
         print("\nPerforming OOD detection analysis...")

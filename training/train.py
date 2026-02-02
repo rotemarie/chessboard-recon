@@ -216,7 +216,7 @@ def main():
     args = parser.parse_args()
     
     # Set seed
-    set_seed(args.seed)
+    #set_seed(args.seed)
     
     # Setup device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
