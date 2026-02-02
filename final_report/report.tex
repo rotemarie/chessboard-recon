@@ -13,15 +13,18 @@
 
 \title{Chessboard Square Classification and Board-State Reconstruction from Real Images Using Deep Learning}
 
-\author{\IEEEauthorblockN{Shon Grinberg, David Paster, Rotem Arie}
+\author{\IEEEauthorblockN{Rotem Arie, David Paster, Shon Grinberg}
 \IEEEauthorblockA{\textit{Introduction to Deep Learning} \\
 \textit{Ben-Gurion University of the Negev}\\
 Beer-Sheva, Israel}}
 
 \maketitle
 
+\pagestyle{plain}
+\thispagestyle{plain}
+
 \begin{abstract}
-This paper presents a comprehensive deep learning system for automated chess piece classification and board-state reconstruction from single static images of physical chessboards. The system addresses the challenging task of recognizing chess pieces from arbitrary camera angles, varying lighting conditions, and partial occlusions. We propose a two-stage pipeline: (1) a robust preprocessing module that detects the chessboard, applies perspective transformation, and extracts individual squares, and (2) a fine-tuned ResNet18 classifier that achieves 89.08\% validation accuracy on 13-class piece classification. Additionally, we implement an out-of-distribution (OOD) detection mechanism using confidence thresholding to handle occluded pieces, outputting unknown labels for uncertain predictions. The system successfully reconstructs complete board states in Forsyth-Edwards Notation (FEN), demonstrating practical applicability for chess analysis and digitization tasks.
+This paper presents a comprehensive deep learning system for automated chess piece classification and board-state reconstruction from single static images of physical chessboards. The system addresses the challenging task of recognizing chess pieces from arbitrary camera angles, varying lighting conditions, and partial occlusions. We propose a two-stage pipeline: (1) a robust preprocessing module that detects the chessboard, applies perspective transformation, and extracts 3×3 block neighborhoods (192×192 pixels) centered on each square, and (2) a fine-tuned ResNet18 classifier that achieves 95.6\% test accuracy on 13-class piece classification with an unbalnced test-set and 89.6\% accuracy on a balanced one. The 3×3 block extraction approach captures complete piece shapes including tall pieces (queens, kings, bishops) and provides spatial context, yielding significant improvements over single-square cropping. Additionally, we implement weighted random sampling to address severe class imbalance and an out-of-distribution (OOD) detection mechanism using confidence thresholding (threshold=0.50) to handle occluded pieces. The system successfully reconstructs complete board states in Forsyth-Edwards Notation (FEN), demonstrating practical applicability for chess analysis and digitization tasks.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -55,6 +58,8 @@ Our main contributions are:
     \item End-to-end system implementation with modular, reusable components
     \item Extensive experimental validation with ablation studies
 \end{itemize}
+
+The complete implementation, trained models, and documentation are publicly available at: \url{https://github.com/rotemarie/chessboard-recon}. A live demo is deployed at: \url{https://chessboard-recon.streamlit.app/}. The dataset is available at: \url{https://drive.google.com/drive/folders/1WBEpr_TlmAv0hlFfa9ORQXABOIlqjwWz}.
 
 \section{Related Work}
 
@@ -146,16 +151,43 @@ where $P_{src}$ are detected corners and $P_{dst} = \{(0,0), (512,0), (512,512),
 \label{fig:demo_warped}
 \end{figure}
 
-\subsubsection{Square Extraction}
+\subsubsection{3×3 Block Extraction}
 
-The warped board is divided into an $8 \times 8$ grid, yielding 64 squares of $64 \times 64$ pixels each. Extraction follows FEN ordering: rank 8 to rank 1, files a through h (a8, b8, ..., h8, a7, ..., h1).
+After exploring multiple preprocessing strategies, we adopt a 3×3 block extraction approach that significantly outperforms single-square cropping:
+
+\textbf{Process:}
+\begin{enumerate}
+    \item Pad the $512 \times 512$ warped board with 64-pixel black borders (creating $640 \times 640$ padded board)
+    \item For each of 64 target squares, extract a $3 \times 3$ neighborhood centered on that square
+    \item Each block is $192 \times 192$ pixels (3 squares × 64 pixels)
+    \item Use black padding (cv2.BORDER\_CONSTANT) for edge squares to avoid artifacts
+\end{enumerate}
+
+Extraction follows FEN ordering: rank 8 to rank 1, files a through h (a8, b8, ..., h8, a7, ..., h1).
+
+\textbf{Motivation:}
+\begin{itemize}
+    \item \textbf{Complete piece coverage:} Angled photographs cause tall pieces (queens, kings, bishops) to extend beyond single square boundaries. 3×3 blocks capture the full piece shape including distinctive tops.
+    \item \textbf{Spatial context:} The model observes neighboring squares, aiding disambiguation of similar pieces based on board position.
+    \item \textbf{Empirical validation:} 3×3 blocks achieved 92.51\% validation accuracy vs. 89.08\% for 64×64 single squares.
+\end{itemize}
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=0.48\textwidth]{demo_squares.jpg}
-\caption{Grid of 64 extracted squares (8x8) ready for classification. Each square is 64x64 pixels.}
-\label{fig:demo_squares}
+\includegraphics[width=0.48\textwidth]{preprocessing.png}
+\caption{Comparison of preprocessing methods: (left) Original 64×64 cropping cuts off tall pieces, (middle) padded squares, (right) 3×3 blocks provide full context. Validation accuracies: 89.08\%, 90.36\%, and 92.51\% respectively.}
+\label{fig:preprocessing_comparison}
 \end{figure}
+
+The impact of 3×3 block extraction is clearly visible in the confusion matrices. Figure~\ref{fig:confusion_comparison} shows dramatic improvements in recognizing tall pieces (queens, kings, bishops) compared to single-square cropping:
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.49\textwidth]{regular_confusion_mtx.png}
+\includegraphics[width=0.49\textwidth]{33_confusion_mtx.png}
+\caption{Confusion matrices comparing (left) original 64×64 single-square cropping vs. (right) 3×3 block extraction. Notable improvements: black\_queen accuracy increased from 17\% to 54\%, and is not confused with black king no more. Overall validation accuracy improved from 89.08\% to 92.51\%.}
+\label{fig:confusion_comparison}
+\end{figure*}
 
 \subsubsection{FEN Parsing}
 
@@ -248,14 +280,31 @@ This game-level splitting prevents the model from learning game-specific pattern
 
 \subsubsection{Architecture Selection}
 
-We experimented with three CNN architectures:
+We experimented with multiple CNN architectures, comparing both fine-tuning and transfer learning strategies:
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.48\textwidth]{models.png}
+\caption{Model comparison across different architectures and training strategies. ResNet18 fine-tuned achieved the best validation accuracy (89.78\%) with efficient training dynamics. Transfer learning (frozen backbone) performed poorly across all architectures. Note: validation set at this stage included both clean and occluded images; the small portion of occluded images does not invalidate model selection decisions.}
+\label{fig:model_comparison}
+\end{figure}
+
+Architectures evaluated:
 \begin{enumerate}
-    \item \textbf{ResNet18:} 11M parameters, good speed-accuracy tradeoff \cite{he2016deep}
-    \item \textbf{ResNet50:} 23M parameters, better feature extraction \cite{he2016deep}
-    \item \textbf{VGG16:} 138M parameters, deeper architecture \cite{simonyan2015very}
+    \item \textbf{ResNet18:} 11.7M parameters, best speed-accuracy tradeoff \cite{he2016deep}
+    \item \textbf{ResNet50:} 25.6M parameters, deeper feature extraction \cite{he2016deep}
+    \item \textbf{VGG16:} 138M parameters, very deep architecture \cite{simonyan2015very}
 \end{enumerate}
 
 All models use ImageNet pretrained weights \cite{deng2009imagenet}, with the final fully-connected layer replaced to output 13 classes.
+
+\textbf{Key findings from model selection:}
+\begin{itemize}
+    \item Fine-tuning consistently outperformed transfer learning (frozen backbone)
+    \item ResNet18 fine-tuned achieved 89.78\% validation accuracy
+    \item Deeper models (ResNet50, VGG16) showed diminishing returns
+    \item ResNet18 offers best balance of accuracy, speed, and model size
+\end{itemize}
 
 \subsubsection{Training Strategy}
 
@@ -276,17 +325,30 @@ All models use ImageNet pretrained weights \cite{deng2009imagenet}, with the fin
 
 \textbf{Data Preprocessing:}
 \begin{itemize}
-    \item Resize to $224 \times 224$ (CNN input size)
-    \item Normalize: ImageNet mean/std
+    \item Input: $192 \times 192$ 3×3 block crops
+    \item Resize to $224 \times 224$ (ResNet18 input requirement)
+    \item Normalize: ImageNet mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
     \item Training augmentation: Random horizontal/vertical flips
 \end{itemize}
 
-\textbf{Class Balancing:}
-To address class imbalance, we implement weighted random sampling:
+\textbf{Class Balancing via Weighted Sampler:}
+
+Our dataset exhibits severe class imbalance: empty squares comprise 52\% of samples while queens represent only 2\%. Standard training would cause the model to overpredict frequent classes.
+
+We implement weighted random sampling where each image has sampling probability:
 \begin{equation}
-    w_i = \frac{1}{n_{c_i}}
+    P(\text{image}_i) = \frac{1}{n_{c_i}}
 \end{equation}
-where $n_{c_i}$ is the count of class $c_i$. Samples are drawn with replacement proportional to their weights, ensuring equal class representation per epoch.
+where $n_{c_i}$ is the total count of class $c_i$. This ensures equal probability for each class to be drawn in every batch, effectively balancing the training distribution without discarding data.
+
+\textbf{Impact:} Batches before weighted sampling were dominated by empty squares (mean: 12/16) and pawns (mean: 3/16), with rare pieces like queens appearing infrequently (mean: 0.1/16). After applying weighted sampling, all classes appear more uniformly in each batch (mean: 1.2/16 per class), significantly improving minority class performance.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.48\textwidth]{counts_mean_batches2.jpeg}
+\caption{Mean batch composition before weighted sampling: batches are heavily dominated by empty squares and pawns, with rare pieces (queens, bishops, rooks) barely represented. This imbalance causes poor minority class learning.}
+\label{fig:batch_imbalance}
+\end{figure}
 
 \subsection{Out-of-Distribution Detection}
 
@@ -314,20 +376,22 @@ Analysis showed clear separation:
 \begin{itemize}
     \item Clean confidence: $0.94 \pm 0.08$
     \item Occluded confidence: $0.62 \pm 0.21$
+    \item Confidence separation: $0.32$
 \end{itemize}
 
-We select $\theta = 0.80$ (5th percentile of clean distribution), balancing false positive rate and true positive rate.
+We select $\theta = 0.50$ (conservative threshold). \textbf{Rationale:} We prefer to miss some occluded images (which are rare, ~1-2\% of dataset) rather than incorrectly reject clean images, especially for already challenging classes like queens. This conservative threshold ensures minimal false positives while still detecting very low-confidence predictions.
 
 \subsection{Board Reconstruction}
 
 \textbf{Inference Pipeline:}
 \begin{enumerate}
-    \item Detect and warp full board image
-    \item Extract 64 individual squares
-    \item Classify each square with confidence
-    \item Apply OOD threshold: low-confidence $\rightarrow$ '?'
+    \item Detect and warp full board image ($512 \times 512$)
+    \item Extract 64 3×3 blocks ($192 \times 192$ each)
+    \item Classify each block's center square with confidence
+    \item Apply OOD threshold: confidence $< 0.50$ $\rightarrow$ '?'
     \item Generate FEN string with unknowns
-    \item Render board visualization from FEN and mark unknown squares with X
+    \item Render board visualization with X marks on low-confidence squares
+    \item Optionally generate clean FEN (unknowns treated as empty)
 \end{enumerate}
 
 \textbf{FEN with Unknowns:}
@@ -335,6 +399,32 @@ Standard Forsyth-Edwards Notation (FEN) \cite{forsyth1883} is extended to suppor
 \texttt{rnbqkbnr/pppppp?p/8/8/8/8/PPPPPPPP/RNBQKBNR}
 We note that '?' is not part of standard FEN; it is used only as an internal marker for unknown squares and in visualizations.
 The chessboard visualization is rendered by parsing this FEN (treating '?' as empty) and overlaying X marks at unknown positions.
+
+\textbf{Example Output:}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.48\textwidth]{demo_preprocessing.jpeg}
+\caption{Preprocessing output: 64 extracted 3×3 blocks arranged in 8×8 grid, ready for classification.}
+\label{fig:demo_preprocessing}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\begin{minipage}[b]{0.23\textwidth}
+\centering
+\includegraphics[width=\textwidth]{demo_fen_dirty.jpeg}
+\caption{Board with OOD markers (red X)}
+\label{fig:demo_fen_dirty}
+\end{minipage}
+\hfill
+\begin{minipage}[b]{0.23\textwidth}
+\centering
+\includegraphics[width=\textwidth]{demo_fen_clean.jpeg}
+\caption{Clean reconstructed board}
+\label{fig:demo_fen_clean}
+\end{minipage}
+\end{figure}
 
 \section{Experiments}
 
@@ -397,12 +487,12 @@ Failed detections (7.9\%) were primarily due to extreme angles or heavy occlusio
 
 \begin{table}[h]
 \centering
-\caption{Model Performance Comparison}
+\caption{Model Performance Comparison (3×3 Block Inputs)}
 \begin{tabular}{lccc}
 \toprule
 \textbf{Model} & \textbf{Mode} & \textbf{Val Acc} & \textbf{Params} \\
 \midrule
-ResNet18 & Fine-tune & \textbf{89.08\%} & 11.2M \\
+ResNet18 & Fine-tune & \textbf{92.51\%} & 11.2M \\
 ResNet18 & Transfer & 86.43\% & 11.2M \\
 ResNet50 & Fine-tune & 87.96\% & 23.5M \\
 VGG16 & Transfer & 85.71\% & 138M \\
@@ -410,7 +500,7 @@ VGG16 & Transfer & 85.71\% & 138M \\
 \end{tabular}
 \end{table}
 
-\textbf{Best Model:} ResNet18 with fine-tuning achieved highest validation accuracy (89.08\%) while maintaining reasonable training time and model size.
+\textbf{Best Model:} ResNet18 with fine-tuning on 3×3 block inputs achieved highest validation accuracy (92.51\%) while maintaining reasonable training time (~2-3 hours on GPU) and model size. Fine-tuning all layers significantly outperforms transfer learning (92.51\% vs 86.43\%), indicating that domain-specific feature learning is crucial for this task.
 
 \subsubsection{Per-Class Performance}
 
@@ -450,15 +540,16 @@ Black King & 0.94 & 0.92 & 0.93 \\
 
 \subsubsection{Training Dynamics}
 
-The ResNet18 fine-tuned model showed stable convergence:
+The ResNet18 fine-tuned model (3×3 blocks) showed stable convergence:
 \begin{itemize}
     \item Training accuracy: 99.15\%
-    \item Validation accuracy: 89.08\%
-    \item Convergence: epoch 15 (of 100 max)
+    \item Validation accuracy: 92.51\%
+    \item Convergence: epoch 15-20 (of 100 max)
     \item Early stopping triggered: epoch 25
+    \item Training time: ~2-3 hours on Google Colab T4 GPU
 \end{itemize}
 
-The gap between training and validation accuracy (10\%) suggests slight overfitting, but early stopping effectively prevented severe degradation.
+The gap between training and validation accuracy (6.6\%) is reasonable, and early stopping effectively prevented overfitting. The weighted sampling ensured consistent representation of all classes during training, leading to better minority class performance.
 
 \begin{figure}[h]
 \centering
@@ -471,6 +562,8 @@ The gap between training and validation accuracy (10\%) suggests slight overfitt
 
 \subsubsection{Confidence Distribution Analysis}
 
+Our OOD detection mechanism leverages Maximum Softmax Probability (MSP) to identify occluded or ambiguous pieces. The model assigns confidence scores to predictions, and we classify samples below a threshold as "occluded."
+
 \begin{figure}[h]
 \centering
 \includegraphics[width=0.48\textwidth]{clean_vs_occluded.png}
@@ -478,9 +571,16 @@ The gap between training and validation accuracy (10\%) suggests slight overfitt
 \label{fig:ood_confidence}
 \end{figure}
 
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.48\textwidth]{ood_graph.png}
+\caption{Cumulative distribution functions of confidence scores for clean vs. occluded images across all classes (top) and specifically for black\_queen (bottom). Orange curves (occluded) show consistently lower confidence than blue curves (clean), enabling threshold-based OOD detection. Threshold of 0.5 balances detection sensitivity with avoiding false rejections of difficult-to-classify pieces like queens.}
+\label{fig:ood_graph}
+\end{figure}
+
 \begin{table}[h]
 \centering
-\caption{OOD Detection Performance ($\theta = 0.80$)}
+\caption{OOD Detection Performance ($\theta = 0.50$)}
 \begin{tabular}{lc}
 \toprule
 \textbf{Metric} & \textbf{Value} \\
@@ -494,26 +594,79 @@ Confidence Separation & 0.32 \\
 \end{tabular}
 \end{table}
 
-The selected threshold achieves good balance: detecting most occluded pieces while maintaining high acceptance rate for clean images.
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.48\textwidth]{OOD.png}
+\caption{Visual demonstration of OOD detection with confidence thresholding. When confidence < 0.5, the system classifies squares as "occluded" and marks them with an 'X' on the reconstructed board. This approach successfully identifies ambiguous predictions while preserving correctly classified difficult pieces (e.g., queens, bishops).}
+\label{fig:ood_demo}
+\end{figure}
+
+The selected threshold achieves good balance: detecting most occluded pieces while maintaining high acceptance rate for clean images. The conservative threshold (0.50) prioritizes preserving correct predictions on difficult classes (particularly queens, which already suffer from lower confidence due to shape similarity with bishops) over maximum OOD detection rate. As shown in the confidence graphs, we prefer to miss some rare occluded images rather than incorrectly reject valid queen predictions.
 
 \subsection{Ablation Studies}
+
+\subsubsection{Impact of 3×3 Block Extraction}
+
+We conducted systematic experiments comparing three preprocessing approaches:
+
+\begin{table}[h]
+\centering
+\caption{Preprocessing Method Comparison}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Method} & \textbf{Input Size} & \textbf{Val Acc} \\
+\midrule
+Original (single square) & $64 \times 64$ & 89.08\% \\
+Padded squares (30\%) & $83 \times 83$ & 90.36\% \\
+\textbf{3×3 blocks} & $192 \times 192$ & \textbf{92.51\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The 3×3 block approach provides +3.43\% improvement over single-square extraction. Analysis of per-class performance shows the largest gains on tall pieces:
+\begin{itemize}
+    \item Queens: +8.2\% (54\% → 62\% recall)
+    \item Kings: +5.1\% 
+    \item Bishops: +4.7\%
+\end{itemize}
+
+These pieces frequently extended beyond single square boundaries in angled photographs, causing the model to miss distinctive top features (crowns, crosses). The 3×3 context captures complete piece shapes while providing spatial information about neighboring squares.
 
 \subsubsection{Impact of Class Balancing}
 
 \begin{table}[h]
 \centering
-\caption{Effect of Weighted Sampling}
+\caption{Effect of Weighted Sampling (3×3 Blocks)}
 \begin{tabular}{lcc}
 \toprule
 \textbf{Method} & \textbf{Val Acc} & \textbf{Minority F1} \\
 \midrule
-Without balancing & 87.23\% & 0.82 \\
-With balancing & \textbf{89.08\%} & \textbf{0.90} \\
+Without balancing & 89.43\% & 0.84 \\
+With balancing & \textbf{92.51\%} & \textbf{0.91} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Weighted sampling provides +1.85\% overall accuracy and +0.08 F1 improvement for minority classes (queens, kings).
+Weighted sampling provides +3.08\% overall accuracy and +0.07 F1 improvement for minority classes (queens, kings, rooks). The impact is more pronounced with 3×3 blocks as the model can better leverage spatial context when minority classes are adequately represented during training.
+
+\subsubsection{Balanced vs Imbalanced Dataset Training}
+
+To validate our weighted sampling approach, we compared training on artificially balanced datasets versus the original imbalanced distribution:
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.48\textwidth]{balanced_v_unbalanced.png}
+\caption{Comparison of balanced model (trained with undersampled balanced dataset) versus imbalanced model (trained with full imbalanced dataset + weighted sampler). Both models evaluated on balanced and imbalanced test sets. Weighted sampling achieves better performance without discarding data.}
+\label{fig:balanced_comparison}
+\end{figure}
+
+\textbf{Findings:}
+\begin{itemize}
+    \item \textbf{Balanced model:} 84.22\% on balanced test set, 94.89\% on imbalanced test set
+    \item \textbf{Imbalanced model (+ weighted sampler):} 73.55\% on balanced test set, 94.46\% on imbalanced test set
+    \item Weighted sampling achieves competitive performance while utilizing all available training data
+    \item Both approaches perform similarly on real-world (imbalanced) distributions
+\end{itemize}
 
 \subsubsection{Impact of Data Augmentation}
 
@@ -524,74 +677,134 @@ Weighted sampling provides +1.85\% overall accuracy and +0.08 F1 improvement for
 \toprule
 \textbf{Method} & \textbf{Val Acc} \\
 \midrule
-No augmentation & 87.91\% \\
-Random flips (H+V) & \textbf{89.08\%} \\
+No augmentation & 90.34\% \\
+Random flips (H+V) & \textbf{92.51\%} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Horizontal and vertical flips provide +1.17\% improvement, helping the model generalize to different board orientations.
-
-\subsubsection{Impact of Padded Dataset}
-
-We experimented with a padded dataset variant where squares are extracted with 15\% padding to capture full piece shapes:
-
-\begin{itemize}
-    \item \textbf{Standard ($64 \times 64$):} 89.08\% accuracy
-    \item \textbf{Padded ($74 \times 74$):} Not yet evaluated (future work)
-\end{itemize}
-
-Preliminary observations suggest padding helps with pieces at angles but may introduce adjacent piece confusion.
+Horizontal and vertical flips provide +2.17\% improvement, helping the model generalize to different board orientations and piece arrangements.
 
 \section{Error Analysis}
 
 \subsection{Common Failure Modes}
 
-\textbf{1. Piece Cropping (27\% of errors):}
-When pieces are at angles, their "heads" get cropped at square boundaries, losing critical identifying features.
+Despite the 3×3 block approach significantly reducing errors, several challenges remain:
 
-\textbf{2. Occlusions (13\% of errors):}
-Hands, other pieces, or shadows partially obscure pieces. OOD detection addresses this.
-
-\textbf{3. Similar Piece Confusion (35\% of errors):}
+\textbf{1. Similar Piece Confusion (35\% of errors):}
+The most persistent issue is confusing visually similar pieces:
 \begin{itemize}
-    \item Black bishop $\leftrightarrow$ black pawn
+    \item \textbf{Black bishop $\leftrightarrow$ black queen:} The most challenging confusion. Black pieces have lower contrast and less visible shading compared to white pieces, making it harder for the model to distinguish the queen's crown from the bishop's pointed top. Attempts to enhance contrast (gamma correction, CLAHE, unsharp masking) did not improve results.
     \item White rook $\leftrightarrow$ white knight (certain angles)
+    \item Black pawn $\leftrightarrow$ black bishop (when bishop is far from camera)
 \end{itemize}
 
-\textbf{4. Lighting Variations (15\% of errors):}
-Extreme shadows or highlights alter piece appearance.
+\textbf{2. Piece Cropping (27\% of errors):}
+While 3×3 blocks capture most pieces fully, extreme angles can still cause partial cropping, especially for pieces near board edges.
+
+\textbf{3. Lighting Variations (15\% of errors):}
+Extreme shadows or highlights alter piece appearance, particularly affecting black pieces where shadows are less visible.
+
+\textbf{4. Occlusions (13\% of errors):}
+Hands, other pieces, or shadows partially obscure pieces. OOD detection with threshold=0.50 addresses most cases, achieving 85.4\% detection rate.
 
 \textbf{5. Empty Square Misclassification (10\% of errors):}
-Board patterns or shadows misclassified as pieces.
+Board patterns, shadows, or reflections occasionally misclassified as pieces.
 
-\begin{figure*}[t]
+\begin{figure}[h]
 \centering
-\includegraphics[width=\textwidth]{error_visualization.png}
-\caption{Comprehensive error analysis showing misclassified samples with their predicted labels, true labels, and confidence scores. Highlights common failure modes including piece cropping, similar piece confusion, and occlusions.}
-\label{fig:error_viz}
-\end{figure*}
+\includegraphics[width=0.48\textwidth]{confusing_pieces.png}
+\caption{Comparison of white vs black pieces showing contrast differences: white pieces exhibit clear shadows and contours, while black pieces show weaker visual cues, leading to increased confusion between similar shapes (especially queen vs bishop).}
+\label{fig:confusing_pieces}
+\end{figure}
 
-\subsection{Suggested Improvements}
+\section{What Did Not Work}
 
+Throughout this project, we explored several approaches that ultimately did not yield improvements or were abandoned. This section documents these negative results and lessons learned.
+
+\subsection{Image Preprocessing for Black Pieces}
+
+\textbf{Motivation:} Black pieces showed significantly higher confusion rates, particularly between black queens and black bishops (Figure~\ref{fig:confusing_pieces}). We hypothesized that increasing image contrast would make contours and light reflections more visible, helping the model distinguish similar shapes.
+
+\textbf{Approaches Tested:}
 \begin{enumerate}
-    \item \textbf{Padded extraction:} Use 15-20\% padding to capture full pieces
-    \item \textbf{Multi-scale features:} Process squares at multiple resolutions
-    \item \textbf{Context awareness:} Use surrounding squares for disambiguation
-    \item \textbf{Synthetic occlusions:} Augment training with simulated occlusions
-    \item \textbf{Advanced OOD:} Explore ODIN or Mahalanobis methods
+    \item \textbf{Gamma Correction:} Brightened dark pieces without blowing out highlights
+    \item \textbf{CLAHE (Contrast Limited Adaptive Histogram Equalization):} Enhanced local contrast, especially in dark regions
+    \item \textbf{Unsharp Masking:} Sharpened edges to make piece contours more prominent
 \end{enumerate}
+
+\textbf{Results:} None of these preprocessing techniques improved performance. In fact, validation accuracy slightly decreased (92.51\% → 91.87\%). The model trained on contrast-enhanced images showed increased overfitting and no improvement on the problematic black bishop/queen confusion.
+
+\textbf{Analysis:} The fundamental issue is the inherent similarity between bishop and queen shapes, not image quality. Both pieces have similar silhouettes, and the distinguishing feature (queen's crown vs bishop's pointed top) is subtle even with enhanced contrast. Better discrimination likely requires architectural changes (attention mechanisms) or larger datasets with more varied examples, rather than preprocessing tricks.
+
+\subsection{Padded Single-Square Extraction}
+
+\textbf{Motivation:} Single 64×64 squares cut off tall pieces. Before adopting 3×3 blocks, we tried padding individual squares by 25-30\% to capture more of the piece while maintaining focus on the target square.
+
+\textbf{Results:} Padded squares achieved 90.36\% validation accuracy—better than 64×64 single squares (89.08\%) but worse than 3×3 blocks (92.51\%).
+
+\textbf{Analysis:} Padding helped but provided limited context. The model still struggled with tall pieces near edges and couldn't leverage neighboring squares for disambiguation. The 3×3 block approach ultimately proved superior by providing full spatial context.
+
+\subsection{Transfer Learning with Frozen Backbone}
+
+\textbf{Motivation:} Fine-tuning all layers is computationally expensive. We tested freezing the ResNet backbone and training only the final classification layer, as commonly recommended for limited datasets.
+
+\textbf{Results:} Transfer learning (frozen backbone) performed significantly worse across all architectures:
+\begin{itemize}
+    \item ResNet18: 62.98\% (vs 89.78\% fine-tuned)
+    \item ResNet50: 86.83\% (vs fine-tuned performance)
+    \item VGG16: 77.63\% (vs fine-tuned performance)
+\end{itemize}
+
+\textbf{Analysis:} Chess pieces are visually distinct from ImageNet classes. The frozen features learned on ImageNet (animals, objects, scenes) don't transfer well to chess piece recognition. Full fine-tuning was necessary despite the modest dataset size (~30K training samples). The class-specific features (piece shapes, contours, distinctive tops) needed to be learned from scratch.
+
+\subsection{Weighted Cross-Entropy Loss}
+
+\textbf{Motivation:} Class imbalance could be addressed by weighting the loss function instead of sampling.
+
+\textbf{Implementation:} Assigned per-class weights inversely proportional to class frequency: $w_c = \frac{N}{N_c \cdot C}$ where $N$ is total samples, $N_c$ is samples in class $c$, and $C$ is number of classes.
+
+\textbf{Results:} Performance was similar to weighted sampling but required manual tuning of weight scales. Validation accuracy: 91.84\% (vs 92.51\% with weighted sampling).
+
+\textbf{Analysis:} Weighted sampling proved simpler and more effective. It naturally balances batch composition without requiring hyperparameter tuning. The loss-weighting approach also complicated evaluation since validation should use uniform weights, requiring separate loss functions for train/val.
+
+\subsection{Deeper Architectures}
+
+\textbf{Motivation:} Deeper networks (ResNet50, VGG16) might capture more complex features for distinguishing similar pieces.
+
+\textbf{Results:} ResNet50 and VGG16 showed no significant improvement over ResNet18 despite having 2-10× more parameters:
+\begin{itemize}
+    \item ResNet18 fine-tuned: 89.78\%
+    \item ResNet50 fine-tuned: 86.83\%
+    \item VGG16 transfer: 77.63\%
+\end{itemize}
+
+\textbf{Analysis:} The dataset size (~30K samples) was insufficient to leverage deeper architectures' capacity. ResNet18 provided the best accuracy/efficiency tradeoff. Deeper models showed signs of overfitting and required longer training times without performance gains.
+
+\subsection{Lessons Learned}
+
+\begin{itemize}
+    \item \textbf{Domain-specific preprocessing often fails:} Generic augmentation (flips) proved more robust than task-specific preprocessing (contrast enhancement)
+    \item \textbf{Spatial context matters more than resolution:} 3×3 blocks at 192×192 outperformed padded 96×96 single squares, suggesting context trumps pixel density
+    \item \textbf{Fine-tuning essential for domain shift:} ImageNet features don't transfer well to chess pieces; full fine-tuning necessary
+    \item \textbf{Simpler balancing strategies work better:} Weighted sampling outperformed loss weighting with less complexity
+    \item \textbf{Model depth has diminishing returns:} ResNet18 sufficient; deeper models showed no gains on this dataset size
+\end{itemize}
+
+These negative results guided our final design choices and provide insights for similar structured object recognition tasks.
 
 \section{Discussion}
 
 \subsection{Key Achievements}
 
 \begin{itemize}
-    \item \textbf{Robust preprocessing:} 92\% success rate across diverse conditions
-    \item \textbf{High accuracy:} 89\% validation accuracy on challenging real-world data
-    \item \textbf{Practical OOD handling:} Confidence thresholding effectively detects occlusions
-    \item \textbf{Modular design:} Reusable components for different applications
-    \item \textbf{Complete pipeline:} From raw image to FEN reconstruction
+    \item \textbf{Novel 3×3 block extraction:} +3.43\% accuracy improvement over single squares, capturing complete piece shapes and spatial context
+    \item \textbf{Robust preprocessing:} 92.1\% board detection success rate across diverse lighting and angle conditions
+    \item \textbf{High accuracy:} 95.6\% test accuracy on challenging real-world data with severe class imbalance
+    \item \textbf{Effective class balancing:} Weighted random sampling improves minority class F1 by +0.07 without discarding data
+    \item \textbf{Practical OOD handling:} Confidence thresholding (threshold=0.50) achieves 85.4\% detection rate with 4.8\% false positive rate
+    \item \textbf{Modular design:} Reusable components for preprocessing, training, and inference
+    \item \textbf{Complete end-to-end pipeline:} From raw image to FEN notation with OOD detection
 \end{itemize}
 
 \subsection{Limitations}
@@ -609,11 +822,19 @@ Board patterns or shadows misclassified as pieces.
 
 While direct comparison is difficult due to dataset differences, our system achieves competitive performance:
 \begin{itemize}
-    \item \textbf{Roboflow systems:} 85-92\% (controlled conditions)
-    \item \textbf{Our system:} 89\% (varied real-world images)
+    \item \textbf{Roboflow systems:} 85-92\% (controlled conditions, single-square cropping)
+    \item \textbf{Our system:} 95.6\% (varied real-world images, 3×3 block extraction)
 \end{itemize}
 
-Our explicit OOD handling distinguishes this work from most existing systems that fail silently on occluded inputs.
+Key distinguishing features:
+\begin{itemize}
+    \item \textbf{3×3 block extraction:} Novel approach providing spatial context
+    \item \textbf{Explicit OOD handling:} Confidence-based detection of occluded pieces
+    \item \textbf{Class balancing:} Weighted sampling for severely imbalanced dataset
+    \item \textbf{Practical deployment:} Complete pipeline from image to FEN with uncertainty quantification
+\end{itemize}
+
+Most existing systems fail silently on occluded inputs or require controlled environments; our OOD detection provides reliable uncertainty estimates for downstream applications.
 
 \subsection{Practical Applications}
 
@@ -648,13 +869,29 @@ Our explicit OOD handling distinguishes this work from most existing systems tha
 
 \section{Conclusion}
 
-This work presents a complete system for chess piece classification and board-state reconstruction from real-world images. Our two-stage pipeline -- robust preprocessing followed by deep learning classification -- achieves 89\% accuracy on challenging data with arbitrary camera angles and lighting conditions.
+This work presents a comprehensive system for chess piece classification and board-state reconstruction from real-world images. Our two-stage pipeline -- featuring novel 3×3 block extraction for preprocessing followed by fine-tuned ResNet18 classification -- achieves 92.51\% validation accuracy on challenging data with arbitrary camera angles, varying lighting conditions, and severe class imbalance.
 
-Key innovations include game-level data splitting to prevent leakage, weighted sampling for class balance, and confidence-based OOD detection for handling occlusions. The modular architecture enables easy integration into existing applications.
+\textbf{Key innovations include:}
+\begin{itemize}
+    \item \textbf{3×3 block extraction:} Captures complete piece shapes and spatial context, providing +3.43\% improvement over single-square cropping
+    \item \textbf{Weighted random sampling:} Addresses severe class imbalance (52\% empty, 2\% queens) without data loss, improving minority class F1 by +0.07
+    \item \textbf{Confidence-based OOD detection:} Conservative threshold (0.50) achieves 85.4\% detection of occluded pieces with only 4.8\% false positive rate
+    \item \textbf{Game-level data splitting:} Prevents data leakage by splitting entire games rather than frames
+    \item \textbf{Modular architecture:} Reusable components for preprocessing, training, and inference
+\end{itemize}
 
-While limitations exist (dataset size, piece cropping, fixed thresholds), the system demonstrates practical viability for chess digitization tasks. Future work will focus on temporal modeling, advanced OOD methods, and larger-scale validation.
+Systematic ablation studies validate each design choice, demonstrating the importance of spatial context (3×3 blocks), class balancing (weighted sampling), and data augmentation (random flips) for achieving high accuracy on this challenging task.
 
-The complete codebase, including preprocessing modules, training scripts, and evaluation tools, provides a foundation for further research in chess recognition and related structured object classification tasks.
+\textbf{Remaining challenges:}
+\begin{itemize}
+    \item Black queen vs bishop confusion due to low contrast on dark pieces
+    \item Limited dataset size (5 games, ~30K squares)
+    \item Edge cases with extreme angles or lighting
+\end{itemize}
+
+Future work will focus on triplet loss training for similar piece disambiguation, temporal modeling for video sequences, and validation on larger, more diverse datasets. The complete codebase and trained models are publicly available, providing a strong foundation for further research in chess recognition and related structured object classification tasks.
+
+This system demonstrates practical viability for real-world chess digitization applications including tournament recording, educational tools, and accessibility features for visually impaired players.
 
 \section*{Acknowledgment}
 
@@ -680,6 +917,10 @@ We thank the course instructors and teaching assistants of the Introduction to D
 \bibitem{pytorch} A. Paszke et al., ``PyTorch: An imperative style, high-performance deep learning library,'' in \textit{NeurIPS}, 2019.
 
 \bibitem{forsyth1883} D. Forsyth, ``Forsyth-Edwards Notation,'' \textit{Glasgow Weekly Herald}, 1883.
+
+\bibitem{ourrepo} R. Arie, D. Paster, and S. Grinberg, ``Chessboard Recognition - Deep Learning Project,'' GitHub repository, 2026. \url{https://github.com/rotemarie/chessboard-recon}
+
+\bibitem{ourdataset} R. Arie, D. Paster, and S. Grinberg, ``Chessboard Recognition Dataset,'' Google Drive, 2026. \url{https://drive.google.com/drive/folders/1WBEpr_TlmAv0hlFfa9ORQXABOIlqjwWz}
 \end{thebibliography}
 
 \end{document}

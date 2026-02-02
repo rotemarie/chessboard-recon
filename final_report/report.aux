@@ -1,0 +1,129 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{roboflow}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {I-A}}Problem Statement}{1}{subsection.1.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {I-B}}Contributions}{1}{subsection.1.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {II}Related Work}{1}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-A}}Chess Recognition Systems}{1}{subsection.2.1}\protected@file@percent }
+\citation{hendrycks2017baseline}
+\citation{liang2018enhancing}
+\citation{lee2018simple}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-B}}Out-of-Distribution Detection}{2}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {III}Methodology}{2}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-A}}System Architecture}{2}{subsection.3.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces End-to-end inference pipeline: board detection and warping, square extraction, classification, OOD filtering, and reconstruction into FEN and visualization.}}{2}{figure.1}\protected@file@percent }
+\newlabel{fig:pipeline_overview}{{1}{2}{End-to-end inference pipeline: board detection and warping, square extraction, classification, OOD filtering, and reconstruction into FEN and visualization}{figure.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}Preprocessing Pipeline}{2}{subsection.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-B}1}Board Detection and Warping}{2}{subsubsection.3.2.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Example input: Real chessboard image captured at an angle with varying lighting conditions.}}{2}{figure.2}\protected@file@percent }
+\newlabel{fig:demo_input}{{2}{2}{Example input: Real chessboard image captured at an angle with varying lighting conditions}{figure.2}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-B}2}3×3 Block Extraction}{2}{subsubsection.3.2.2}\protected@file@percent }
+\citation{he2016deep}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Warped board after perspective transformation: Top-down view normalized to 512x512 pixels.}}{3}{figure.3}\protected@file@percent }
+\newlabel{fig:demo_warped}{{3}{3}{Warped board after perspective transformation: Top-down view normalized to 512x512 pixels}{figure.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Comparison of preprocessing methods: (left) Original 64×64 cropping cuts off tall pieces, (middle) padded squares, (right) 3×3 blocks provide full context. Validation accuracies: 89.08\%, 90.36\%, and 92.51\% respectively.}}{3}{figure.4}\protected@file@percent }
+\newlabel{fig:preprocessing_comparison}{{4}{3}{Comparison of preprocessing methods: (left) Original 64×64 cropping cuts off tall pieces, (middle) padded squares, (right) 3×3 blocks provide full context. Validation accuracies: 89.08\%, 90.36\%, and 92.51\% respectively}{figure.4}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-B}3}FEN Parsing}{3}{subsubsection.3.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Dataset}{3}{subsection.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-C}1}Data Collection}{3}{subsubsection.3.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-C}2}Class Distribution}{3}{subsubsection.3.3.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Class Distribution in Training Set}}{3}{table.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-C}3}Data Splitting}{3}{subsubsection.3.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-D}}Classification Model}{3}{subsection.3.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-D}1}Architecture Selection}{3}{subsubsection.3.4.1}\protected@file@percent }
+\citation{he2016deep}
+\citation{simonyan2015very}
+\citation{deng2009imagenet}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Confusion matrices comparing (left) original 64×64 single-square cropping vs. (right) 3×3 block extraction. Notable improvements: black\_queen accuracy increased from 17\% to 54\%, and is not confused with black king no more. Overall validation accuracy improved from 89.08\% to 92.51\%.}}{4}{figure.5}\protected@file@percent }
+\newlabel{fig:confusion_comparison}{{5}{4}{Confusion matrices comparing (left) original 64×64 single-square cropping vs. (right) 3×3 block extraction. Notable improvements: black\_queen accuracy increased from 17\% to 54\%, and is not confused with black king no more. Overall validation accuracy improved from 89.08\% to 92.51\%}{figure.5}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-D}2}Training Strategy}{4}{subsubsection.3.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-E}}Out-of-Distribution Detection}{4}{subsection.3.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-E}1}Occlusion Problem}{4}{subsubsection.3.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-E}2}Confidence-Based OOD Detection}{4}{subsubsection.3.5.2}\protected@file@percent }
+\citation{forsyth1883}
+\citation{pytorch}
+\citation{opencv}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-F}}Board Reconstruction}{5}{subsection.3.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Experiments}{5}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}Implementation Details}{5}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Evaluation Protocol}{5}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}Preprocessing Results}{5}{subsection.4.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Board Detection Success Rates}}{5}{table.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-D}}Classification Results}{5}{subsection.4.4}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Model Performance Comparison (3×3 Block Inputs)}}{5}{table.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-D}1}Model Comparison}{5}{table.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-D}2}Per-Class Performance}{5}{table.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-D}3}Training Dynamics}{5}{subsubsection.4.4.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces Per-Class Metrics (ResNet18 Fine-tuned)}}{6}{table.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-E}}OOD Detection Results}{6}{subsection.4.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-E}1}Confidence Distribution Analysis}{6}{subsubsection.4.5.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces OOD Detection Performance ($\theta = 0.50$)}}{6}{table.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-F}}Ablation Studies}{6}{subsection.4.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-F}1}Impact of 3×3 Block Extraction}{6}{subsubsection.4.6.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces Preprocessing Method Comparison}}{6}{table.6}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {VII}{\ignorespaces Effect of Weighted Sampling (3×3 Blocks)}}{6}{table.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-F}2}Impact of Class Balancing}{6}{table.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-F}3}Balanced vs Imbalanced Dataset Training}{6}{subsubsection.4.6.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {VIII}{\ignorespaces Effect of Data Augmentation}}{6}{table.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-F}4}Impact of Data Augmentation}{6}{table.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {V}Error Analysis}{7}{section.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Common Failure Modes}{7}{subsection.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VI}What Did Not Work}{7}{section.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}Image Preprocessing for Black Pieces}{7}{subsection.6.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Padded Single-Square Extraction}{7}{subsection.6.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-C}}Transfer Learning with Frozen Backbone}{7}{subsection.6.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-D}}Weighted Cross-Entropy Loss}{7}{subsection.6.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-E}}Deeper Architectures}{8}{subsection.6.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-F}}Lessons Learned}{8}{subsection.6.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Discussion}{8}{section.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-A}}Key Achievements}{8}{subsection.7.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-B}}Limitations}{8}{subsection.7.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-C}}Comparison with Existing Systems}{8}{subsection.7.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-D}}Practical Applications}{8}{subsection.7.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VIII}Future Work}{8}{section.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-A}}Short-term Improvements}{8}{subsection.8.1}\protected@file@percent }
+\bibcite{roboflow}{1}
+\bibcite{hendrycks2017baseline}{2}
+\bibcite{liang2018enhancing}{3}
+\bibcite{lee2018simple}{4}
+\bibcite{he2016deep}{5}
+\bibcite{simonyan2015very}{6}
+\bibcite{deng2009imagenet}{7}
+\bibcite{opencv}{8}
+\bibcite{pytorch}{9}
+\bibcite{forsyth1883}{10}
+\bibcite{ourrepo}{11}
+\bibcite{ourdataset}{12}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-B}}Long-term Extensions}{9}{subsection.8.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {IX}Conclusion}{9}{section.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{References}{9}{section*.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Random samples from each of the 13 classes showing the diversity and challenges in the dataset.}}{10}{figure.6}\protected@file@percent }
+\newlabel{fig:dataset_samples}{{6}{10}{Random samples from each of the 13 classes showing the diversity and challenges in the dataset}{figure.6}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Class distribution across training and validation sets showing natural chess game imbalance.}}{10}{figure.7}\protected@file@percent }
+\newlabel{fig:class_distribution}{{7}{10}{Class distribution across training and validation sets showing natural chess game imbalance}{figure.7}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Model comparison across different architectures and training strategies. ResNet18 fine-tuned achieved the best validation accuracy (89.78\%) with efficient training dynamics. Transfer learning (frozen backbone) performed poorly across all architectures. Note: validation set at this stage included both clean and occluded images; the small portion of occluded images does not invalidate model selection decisions.}}{10}{figure.8}\protected@file@percent }
+\newlabel{fig:model_comparison}{{8}{10}{Model comparison across different architectures and training strategies. ResNet18 fine-tuned achieved the best validation accuracy (89.78\%) with efficient training dynamics. Transfer learning (frozen backbone) performed poorly across all architectures. Note: validation set at this stage included both clean and occluded images; the small portion of occluded images does not invalidate model selection decisions}{figure.8}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Mean batch composition before weighted sampling: batches are heavily dominated by empty squares and pawns, with rare pieces (queens, bishops, rooks) barely represented. This imbalance causes poor minority class learning.}}{10}{figure.9}\protected@file@percent }
+\newlabel{fig:batch_imbalance}{{9}{10}{Mean batch composition before weighted sampling: batches are heavily dominated by empty squares and pawns, with rare pieces (queens, bishops, rooks) barely represented. This imbalance causes poor minority class learning}{figure.9}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces Preprocessing output: 64 extracted 3×3 blocks arranged in 8×8 grid, ready for classification.}}{11}{figure.10}\protected@file@percent }
+\newlabel{fig:demo_preprocessing}{{10}{11}{Preprocessing output: 64 extracted 3×3 blocks arranged in 8×8 grid, ready for classification}{figure.10}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {11}{\ignorespaces Board with OOD markers (red X)}}{11}{figure.11}\protected@file@percent }
+\newlabel{fig:demo_fen_dirty}{{11}{11}{Board with OOD markers (red X)}{figure.11}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {12}{\ignorespaces Clean reconstructed board}}{11}{figure.12}\protected@file@percent }
+\newlabel{fig:demo_fen_clean}{{12}{11}{Clean reconstructed board}{figure.12}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {13}{\ignorespaces Model confidence distribution and prediction accuracy across validation set. High confidence predictions strongly correlate with correct classifications.}}{11}{figure.13}\protected@file@percent }
+\newlabel{fig:model_confidence}{{13}{11}{Model confidence distribution and prediction accuracy across validation set. High confidence predictions strongly correlate with correct classifications}{figure.13}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {14}{\ignorespaces Confidence score distributions for clean vs. occluded images. Clear separation validates MSP-based OOD detection approach.}}{11}{figure.14}\protected@file@percent }
+\newlabel{fig:ood_confidence}{{14}{11}{Confidence score distributions for clean vs. occluded images. Clear separation validates MSP-based OOD detection approach}{figure.14}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {15}{\ignorespaces Cumulative distribution functions of confidence scores for clean vs. occluded images across all classes (top) and specifically for black\_queen (bottom). Orange curves (occluded) show consistently lower confidence than blue curves (clean), enabling threshold-based OOD detection. Threshold of 0.5 balances detection sensitivity with avoiding false rejections of difficult-to-classify pieces like queens.}}{11}{figure.15}\protected@file@percent }
+\newlabel{fig:ood_graph}{{15}{11}{Cumulative distribution functions of confidence scores for clean vs. occluded images across all classes (top) and specifically for black\_queen (bottom). Orange curves (occluded) show consistently lower confidence than blue curves (clean), enabling threshold-based OOD detection. Threshold of 0.5 balances detection sensitivity with avoiding false rejections of difficult-to-classify pieces like queens}{figure.15}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {16}{\ignorespaces Visual demonstration of OOD detection with confidence thresholding. When confidence < 0.5, the system classifies squares as "occluded" and marks them with an 'X' on the reconstructed board. This approach successfully identifies ambiguous predictions while preserving correctly classified difficult pieces (e.g., queens, bishops).}}{11}{figure.16}\protected@file@percent }
+\newlabel{fig:ood_demo}{{16}{11}{Visual demonstration of OOD detection with confidence thresholding. When confidence < 0.5, the system classifies squares as "occluded" and marks them with an 'X' on the reconstructed board. This approach successfully identifies ambiguous predictions while preserving correctly classified difficult pieces (e.g., queens, bishops)}{figure.16}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {17}{\ignorespaces Comparison of balanced model (trained with undersampled balanced dataset) versus imbalanced model (trained with full imbalanced dataset + weighted sampler). Both models evaluated on balanced and imbalanced test sets. Weighted sampling achieves better performance without discarding data.}}{12}{figure.17}\protected@file@percent }
+\newlabel{fig:balanced_comparison}{{17}{12}{Comparison of balanced model (trained with undersampled balanced dataset) versus imbalanced model (trained with full imbalanced dataset + weighted sampler). Both models evaluated on balanced and imbalanced test sets. Weighted sampling achieves better performance without discarding data}{figure.17}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {18}{\ignorespaces Comparison of white vs black pieces showing contrast differences: white pieces exhibit clear shadows and contours, while black pieces show weaker visual cues, leading to increased confusion between similar shapes (especially queen vs bishop).}}{12}{figure.18}\protected@file@percent }
+\newlabel{fig:confusing_pieces}{{18}{12}{Comparison of white vs black pieces showing contrast differences: white pieces exhibit clear shadows and contours, while black pieces show weaker visual cues, leading to increased confusion between similar shapes (especially queen vs bishop)}{figure.18}{}}
+\gdef \@abspage@last{12}
