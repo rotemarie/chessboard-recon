@@ -130,14 +130,7 @@ def get_dataloaders(image_datasets, batch_size=16, num_workers=2,
     """
     if use_weighted_sampler:
         # Auto-calculate num_samples if not provided
-        if num_samples is None:
-            # Calculate balanced number of samples
-            train_histo = get_dataset_histogram(image_datasets['train'])
-            num_classes = len(image_datasets['train'].classes)
-            # Average samples per class (excluding empty class for balance)
-            avg_without_empty = (sum(train_histo.values()) - train_histo.get('empty', 0)) // (num_classes - 1)
-            num_samples = avg_without_empty * num_classes
-        
+
         dataloaders = {
             x: DataLoader(
                 image_datasets[x],
@@ -145,7 +138,7 @@ def get_dataloaders(image_datasets, batch_size=16, num_workers=2,
                 num_workers=num_workers,
                 sampler=create_weighted_sampler(
                     image_datasets[x],
-                    num_samples if x == 'train' else None
+                    len(image_datasets[x])
                 )
             )
             for x in ['train', 'val']
