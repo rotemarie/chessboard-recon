@@ -228,46 +228,41 @@ python -m inference.pipeline \
 - `crops_grid.jpg` - 8×8 grid visualization
 - `predictions.json` - Per-square labels and confidences
 
----
+**Option C: Evaluation API (For Course Submission)**
 
-## Usage
+For automatic evaluation, use the standardized `predict_board()` function:
 
-### Command Line Inference
+```python
+import cv2
+from evaluate import predict_board
 
-```bash
-python -m inference.pipeline --image image3.jpg --class-dir dataset/train --output-dir outputs --save-crops --save-grid --save-clean-board
+# Load image as RGB
+image = cv2.imread("chessboard.jpg")
+image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+# Get predictions as (8, 8) tensor
+board = predict_board(image_rgb)
+print(board)  # torch.Tensor, dtype=int64, device=cpu
 ```
 
-**What you get in `outputs/`:**
-- `fen.txt` - FEN string (uses `?` for unknown squares)
-- `board.svg` - board visualization rendered from the FEN (open in a browser)
-- `predictions.json` - per-square labels and confidences
-- `warped_board.jpg` - top-down warped board
-- `crops/` - 64 block crops (optional)
-- `crops_grid.jpg` - separated 8x8 grid of block crops (optional)
-- `fen.svg` - clean board visualization (no X markers, optional)
-- `fen_clean.txt` - standard FEN with unknowns treated as empty (optional)
+**Output format:**
+- Shape: `(8, 8)` 
+- Values: `[0-13]` representing piece types
+- `0-5`: White pieces (pawn, rook, knight, bishop, queen, king)
+- `6-11`: Black pieces (pawn, rook, knight, bishop, queen, king)
+- `12`: Empty square
+- `13`: Unknown/Occluded (OOD detection)
 
-### Flags
+**Test the API:**
+```bash
+# Verify output format
+python test_evaluate.py full_demo/og.jpeg
 
-- `--image` Path to the input image (required).
-- `--model` Path to the model checkpoint (default: `model/resnet18_ft_blocks_black.pth`).
-- `--class-dir` Directory with class subfolders (ImageFolder order).
-- `--classes-file` Text file with class names, one per line (default: `model/classes.txt`).
-- `--output-dir` Output directory for artifacts (default: `outputs`).
-- `--threshold` Confidence threshold for OOD (default: `0.5`).
-- `--board-size` Size of the warped board in pixels (default: `512`).
-- `--render-size` Size of the rendered board SVG (default: `512`).
-- `--save-crops` Save per-square crops (block context) to disk.
-- `--crops-dir` Custom directory for crops (default: `outputs/crops`).
-- `--save-grid` Save a separated 8x8 grid of block crops as `outputs/crops_grid.jpg`.
-- `--save-clean-board` Save `fen.svg` and `fen_clean.txt` without X markers.
-- `--print-squares` Print square indices, positions, and shapes.
+# Quick test
+python evaluate.py full_demo/og.jpeg
+```
 
-**Notes:**
-- If the model file is not at `model/resnet18_ft_blocks_black.pth`, pass `--model` explicitly.
-- Class order must match training: `model/classes.txt` is preferred; if using `--class-dir`, folder names are sorted.
-- Use `--save-clean-board` if you want a standard FEN string with empty squares (no `?`).
+See `evaluate.py` and `test_evaluate.py` for implementation details.
 
 ---
 
@@ -361,6 +356,9 @@ rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR
 
 ```
 chessboard-recon/
+├── evaluate.py                # Evaluation API (predict_board function)
+├── test_evaluate.py           # Test script for evaluation API
+├── app.py                     # Streamlit web interface
 ├── data/                      # Raw images + FEN labels (download separately)
 ├── preprocessing/             # Data processing pipeline
 │   ├── board_detector.py     # Board detection & warping
@@ -384,7 +382,6 @@ chessboard-recon/
 │   └── classes.txt           # Class names
 ├── plots/                     # Training visualization plots
 ├── output/                    # Demo images
-├── app.py                     # Streamlit web interface
 ├── requirements.txt           # Python dependencies
 └── README.md                  # This file
 ```
